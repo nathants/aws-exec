@@ -45,7 +45,7 @@ bash bin/cli.sh -h        # interact with the service via the cli
   ```
 
 
-- checkip from multiple simulataneous exeuctions
+- checkip from multiple simultaneous executions
   ```
   >> for i in {1..5}; do bash bin/cli.sh exec -- curl -s checkip.amazonaws.com & done
   52.34.141.29
