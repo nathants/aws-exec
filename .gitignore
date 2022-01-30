@@ -1,0 +1,10 @@
+cli
+env.sh
+*.gzip
+frontend/public/js/
+frontend/node_modules/*
+
+backend/backend
+node_modules/
+cljs-runtime/
+.empty

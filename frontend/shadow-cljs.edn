@@ -1,0 +1,12 @@
+{:source-paths ["src"]
+ :dependencies [[cljs-http "0.1.46"]
+                [garden "1.3.10"]
+                [arttuka/reagent-material-ui "5.2.4-0"]
+                [funcool/bide "1.7.0"]
+                [reagent "1.1.0"]]
+ :nrepl {:port 3333}
+ :dev-http {8000 "public"}
+ :builds {:app {:target :browser
+                :output-dir "public/js"
+                :js-options {:js-provider :shadow}
+                :modules {:main {:init-fn frontend/main}}}}}
