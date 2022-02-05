@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/alexflint/go-arg"
-	"github.com/aws/aws-sdk-go/aws"
 	"github.com/nathants/aws-rce/rce"
 	"github.com/nathants/cli-aws/lib"
 )
@@ -87,14 +86,7 @@ func exec() {
 		getResp := rce.ExecGetResponse{}
 		err := lib.RetryAttempts(ctx, 7, func() error {
 			client := http.Client{}
-			data, err := json.Marshal(rce.ExecGetRequest{
-				Uid:       postResponse.Uid,
-				Increment: aws.Int(increment),
-			})
-			if err != nil {
-				return err
-			}
-			req, err := http.NewRequest(http.MethodGet, url+"/api/exec", bytes.NewReader(data))
+			req, err := http.NewRequest(http.MethodGet, url+fmt.Sprintf("/api/exec?uid=%s&increment=%d", postResponse.Uid, increment), nil)
 			if err != nil {
 				return err
 			}
@@ -104,7 +96,7 @@ func exec() {
 				return err
 			}
 			defer func() { _ = out.Body.Close() }()
-			data, err = ioutil.ReadAll(out.Body)
+			data, err := ioutil.ReadAll(out.Body)
 			if err != nil {
 				return err
 			}

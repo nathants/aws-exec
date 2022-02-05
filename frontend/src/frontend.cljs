@@ -1,53 +1,107 @@
 (ns frontend
   (:require-macros [cljs.core.async.macros :refer [go go-loop]])
   (:require ["libsodium-wrappers" :as sodium]
+            ["localforage" :as localforage]
             [cljs-http.client :as http]
-            [cljs.core.async :refer [<! >! chan timeout] :as a]
+            [cljs.core.async :refer [<! >! chan put! close! timeout] :as a]
             [cljs.pprint]
             [reagent.dom :as reagent.dom]
             [reagent.core :as reagent]
             [bide.core :as bide]
             [garden.core :as garden]
             [clojure.string :as s]
-            [reagent-mui.material.app-bar :refer [app-bar]]
             [reagent-mui.material.card :refer [card]]
             [reagent-mui.material.text-field :refer [text-field]]
             [reagent-mui.material.container :refer [container]]
-            [reagent-mui.material.grid :refer [grid]]
-            [reagent-mui.material.icon-button :refer [icon-button]]
-            [reagent-mui.material.toolbar :refer [toolbar]]
-            [reagent-mui.material.typography :refer [typography]]
-            [reagent-mui.icons.home :refer [home]]
-            [reagent-mui.icons.sms :refer [sms]]
-            [reagent-mui.icons.folder :refer [folder]]))
-
-(defn log [& args] (apply js/console.log (map clj->js args)))
-(defn event-key ^str [^js/KeyboardEvent e] (.-key e))
-(defn focus [^js/Object e] (.focus e))
-(defn query-selector ^js/Object [^js/Object e ^str q] (.querySelector e q))
-(defn blur-active [] (.blur (.-activeElement js/document)))
-(defn target-value [^js/Event e] (.-value (.-target e)))
-(defn prevent-default [^js/Event e] (.preventDefault e))
+            [reagent-mui.material.linear-progress :refer [linear-progress]]
+            [reagent-mui.material.button :refer [button]]))
 
 (set! *warn-on-infer* true)
 
-(let [id (atom 0)
-      -gen-id (memoize
-               (fn [& args]
-                 (swap! id inc)))]
-  (defn gen-id [& args]
-    (if (zero? (count args))
-      (swap! id inc)
-      (apply -gen-id args))))
+(defn log [& args]
+  (apply js/console.log (map clj->js args)))
+
+(defn event-key ^str [^js/KeyboardEvent e]
+  (if e
+    (.-key e)
+    ""))
+
+(defn focus [^js/Object e]
+  (.focus e))
+
+(defn target-value [^js/Event e]
+  (.-value (.-target e)))
+
+(defn prevent-default [^js/Event e]
+  (.preventDefault e))
+
+(defn to-uint8-array [string]
+  (.encode (js/TextEncoder.) string))
+
+(defn to-hex [uint8-array]
+  (.to_hex sodium uint8-array))
+
+(def sodium-ready
+  (let [c (chan)]
+    (.then (.-ready sodium) #(close! c))
+    c))
+
+(defn blake2b-32 [string]
+  (to-hex (.crypto_generichash sodium 32 (to-uint8-array string))))
+
+(defn lf-set-backend []
+  (let [c (chan)]
+    (-> (.setDriver localforage (.-INDEXEDDB localforage))
+      (.then #(close! c))
+      (.catch #(do (log :error %)
+                   (put! c false))))
+    c))
+
+(defn lf-clear []
+  (let [c (chan)]
+    (-> (.clear localforage)
+      (.then #(close! c))
+      (.catch #(do (log :error %)
+                   (put! c false))))
+    c))
+
+(defn lf-set [k v]
+  (let [c (chan)]
+    (-> (.setItem localforage k v)
+      (.then #(close! c))
+      (.catch #(do (log :error %)
+                   (put! c false))))
+    c))
+
+(defn lf-get [k]
+  (let [c (chan)]
+    (-> (.getItem localforage k)
+      (.then #(put! c (or % false)))
+      (.catch #(do (log :error %)
+                   (put! c false))))
+    c))
+
+(defn lf-rm [k]
+  (let [c (chan)]
+    (-> (.removeItem localforage k)
+      (.then #(put! c true))
+      (.catch #(do (log :error %)
+                   (put! c false))))
+    c))
 
 (defonce state
   (reagent/atom
-   {:modal-open false
+   {:username ""
+    :password ""
+    :history []
+    :offset 0
     :search-focus false
     :key-listener false
     :mouse-listener false
     :search-text ""
-    :page home}))
+    :events []
+    :loading false
+    :page nil}))
 
 (def style
   (garden/css
@@ -61,62 +115,56 @@
 
 (def card-style
   {:style {:padding "20px"
-           :margin-bottom "10px"}
+           :margin-bottom "10px"
+           :overflow :scroll}
    :class "bg-color"})
 
+(defn auth? []
+  (not (s/blank? (:auth @state))))
+
+(defn scroll-down []
+  (mapv #(go
+           (<! (a/timeout (* % 10)))
+           (js/window.scrollTo 0 js/document.body.scrollHeight))
+        (range 20)))
+
 (defn component-home []
-  [card card-style
-   [typography "github.com/nathants/aws-rce"]])
-
-(defn component-files []
-  [card card-style
-   [typography "files"]])
-
-(defn component-search []
-  [:<>
-   (for [line (remove s/blank? (s/split (:search-text @state) #"/"))]
-     ^{:key (gen-id)} [card card-style
-                       [typography line]])])
-
-(defn component-dms []
-  [card card-style
-   [typography "dms"]])
+  (if (auth?)
+    [:<>
+     (for [[i event] (map vector (range) (:events @state))]
+       ^{:key i} [card card-style
+                  [:div {:style {:white-space :pre}} event]])
+     (if (:loading @state)
+       [card card-style
+        [linear-progress {:style {:height "13px"}}] ]
+       [text-field {:label "aws-rce terminal"
+                    :id "search"
+                    :autoComplete "off"
+                    :multiline true
+                    :fullWidth true
+                    :autoFocus true
+                    :focused (:search-focus @state)
+                    :value (:search-text @state)
+                    :on-focus #(swap! state assoc :search-focus true)
+                    :on-blur #(swap! state assoc :search-focus false)
+                    :on-change #(do (swap! state assoc :search-text (target-value %))
+                                    (scroll-down))
+                    :style {:width "98%"
+                            :margin "1%"}}])
+     ]
+    [:form
+     [card card-style
+      [text-field {:label "auth"
+                   :value (:auth @state)
+                   :type :password
+                   :on-change #(swap! state assoc :auth (target-value %))
+                   :style {:width "100%"}} ]]
+     [card card-style
+      [button {:style {:padding "10px" :border "solid rgba(0, 0, 0, .25) 1px" :width "100%"}} "submit"]]]))
 
 (defn component-not-found []
   [:div
    [:p "404"]])
-
-(defn component-menu-button [page-name page-component icon]
-  [icon-button {:id page-name
-                :class "menu-button"
-                :href (str "#/" page-name)
-                :style  (merge {:padding "15px"}
-                               (if (= page-component (:page @state))
-                                 {:color "red"}))}
-   [grid
-    [icon]
-    [typography {:style {:font-weight 700}} page-name]]])
-
-(defn component-help []
-  [grid {:spacing 0
-         :alignItems "center"
-         :justify "center"
-         :style {:display "flex"
-                 :flexDirection "column"
-                 :justifyContent "center"
-                 :minHeight "100vh"}}
-   [card {:style {:padding "20px"}}
-    [:strong "keyboard shortcuts"]
-    #_
-    [:ul {:style {:padding-left "25px"}}
-     [:li "h : home"]
-     [:li "f : files"]
-     [:li "d : dms"]
-     [:li "/ : search"
-      [:ul {:style {:padding-left "23px"}}
-       [:li "c-h : clear search text"]]]]]])
-
-(def search-ref (atom nil))
 
 (defn component-main []
   [container {:id "content" :style {:padding 0 :margin-top "10px"}}
@@ -125,18 +173,10 @@
 (defn component-root []
   [:<>
    [:style style]
-   (if (:modal-open @state)
-     [component-help]
-     [component-main])])
+   [component-main]])
 
 (def router
   [["/" component-home]
-   ["/home" component-home]
-   ;; ["/files" component-files]
-   ;; ["/search" component-search]
-   ;; ["/search/(.*)" component-search]
-   ;; ["/dms" component-dms]
-
    ["(.*)" component-not-found]])
 
 (defn mousedown-listener [e]
@@ -148,21 +188,89 @@
     (.click a)
     (.remove a)))
 
+(def api-url "") ;; or "https://$PROJECT_DOMAIN" when using bin/dev.sh
+
+(defn exec-api-post []
+  (go-loop [i 0]
+    (let [resp (<! (http/post (str api-url "/api/exec")
+                              {:headers {"auth" (blake2b-32 (:auth @state))}
+                               :json-params {:argv ["bash" "-c" (:search-text @state)]}
+                               :with-credentials? false}))]
+      (cond
+        (= 401 (:status resp)) (do (swap! state assoc :auth "")
+                                   (swap! state assoc :loading false)
+                                   (throw "bad auth"))
+        (= 200 (:status resp)) (:uid (:body resp))
+        (< i 7) (do (<! (a/timeout (* i 10)))
+                    (recur (inc i)))
+        :else (do (swap! state assoc :loading false)
+                  (throw "failed after several tries"))))))
+
+(defn exec-api-get [uid increment]
+  (go-loop [i 0]
+    (let [resp (<! (http/get (str api-url "/api/exec")
+                             {:query-params {:uid uid
+                                             :increment increment}
+                              :headers {"auth" (blake2b-32 (:auth @state))}
+                              :with-credentials? false}))]
+      (when (= 7 i)
+        (swap! state assoc :loading false)
+        (throw "failed after several tries"))
+      (cond
+        (= 200 (:status resp)) resp
+        (= 409 (:status resp)) resp
+        :else (do (<! (a/timeout (* i 10)))
+                  (recur (inc i)))))))
+
+(defn s3-log-get [log-url]
+  (go-loop [i 0]
+    (let [resp (<! (http/get log-url {:with-credentials? false}))]
+      (when (= 7 i)
+        (swap! state assoc :loading false)
+        (throw "failed after several tries"))
+      (cond
+        (= 200 (:status resp)) resp
+        :else (do (<! (a/timeout (* i 10)))
+                  (recur (inc i)))))))
+
+(defn submit-command [e]
+  (when (:search-focus @state)
+    (go
+      (swap! state merge {:loading true
+                          :search-focus false})
+      (let [uid (<! (exec-api-post))]
+        (swap! state update-in [:history] conj (:search-text @state))
+        (swap! state assoc :search-text "")
+        (swap! state assoc :offset 0)
+        (loop [increment 0]
+          (let [resp (<! (exec-api-get uid increment))]
+            (condp = (:status resp)
+              200 (if (not (s/blank? (:log (:body resp))))
+                    (let [new-increment (:increment (:body resp))
+                          log-url (:log (:body resp))
+                          event (:body (<! (s3-log-get log-url)))]
+                      (swap! state update-in [:events] conj event)
+                      (scroll-down)
+                      (recur new-increment))
+                    (swap! state #(-> %
+                                    (update-in [:events] conj (str "exit code: " (:exit_code (:body resp))))
+                                    (assoc :loading false)))
+                    (scroll-down))
+              409 (do (<! (a/timeout 50))
+                      (recur increment)))))))
+    (scroll-down)
+    (prevent-default e)))
+
 (defn keydown-listener [e]
   (cond
-    (:modal-open @state) (swap! state assoc :modal-open false)
-    (= "Enter" (event-key e)) (when (:search-focus @state)
-                                nil)
-    (= "?" (event-key e))    (swap! state assoc :modal-open true)
+    (= "Enter" (event-key e)) (submit-command e)
     (#{"INPUT" "TEXTAREA"} (.-tagName js/document.activeElement)) nil
-    (= "h" (event-key e)) (navigate-to "/home")
-    (= "f" (event-key e)) (navigate-to "/files")
-    (= "d" (event-key e)) (navigate-to "/dms")
     (= "/" (event-key e)) (when-not (:search-focus @state)
-                            (focus (query-selector @search-ref "input"))
                             (swap! state merge {:search-focus true})
                             (prevent-default e))
-    :else nil))
+    (= "ArrowUp" (event-key e)) (swap! state update-in [:offset] inc)
+    (= "ArrowDown" (event-key e)) (swap! state update-in [:offset] dec)
+    :else (log :key (event-key e))))
 
 (defn url []
   (last (s/split js/window.location.href #"#/")))
@@ -176,18 +284,25 @@
                                      (get new key))
                            (f  (get new key))))))
 
-(defwatch :search-text
+(defwatch :auth
   (fn [text]
-    (navigate-to (str "/search/" text))))
+    (lf-set "auth" text)))
+
+(defwatch :loading
+  (fn [_]
+    (scroll-down)))
+
+(defwatch :offset
+  (fn [val]
+    (let [n (mod val (count (:history @state)))]
+      (swap! state assoc :search-text (nth (:history @state) n)))))
 
 (defwatch :search-focus
-  (fn [focus]
-    (when (and focus (not (s/starts-with? (url) "/search/")))
-      (navigate-to (str "/search/" (:search-text @state))))))
+  (fn [val]
+    (when val
+      (focus (first (js/document.querySelectorAll "#search"))))))
 
 (defn on-navigate [component data]
-  (when (= component-search component)
-    (swap! state assoc :search-text (js/decodeURIComponent (:0 data))))
   (swap! state merge {:page component :parts (href-parts)}))
 
 (defn document-listener [name f]
@@ -197,7 +312,7 @@
       (swap! state assoc key true))))
 
 (defn start-router []
-  (bide/start! (bide/router router) {:default home
+  (bide/start! (bide/router router) {:default "/"
                                      :on-navigate on-navigate
                                      :html5? false}))
 
@@ -205,7 +320,11 @@
   (reagent.dom/render [component-root] (js/document.getElementById "app")))
 
 (defn ^:dev/after-load main []
-  (start-router)
-  (document-listener "keydown" keydown-listener)
-  (document-listener "mousedown" mousedown-listener)
-  (reagent-render))
+  (go (start-router)
+      (document-listener "keydown" keydown-listener)
+      (document-listener "mousedown" mousedown-listener)
+      (<! (lf-set-backend))
+      (when-let [auth (<! (lf-get "auth"))]
+        (swap! state assoc :auth auth))
+      (<! sodium-ready)
+      (reagent-render)))

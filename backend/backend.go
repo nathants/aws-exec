@@ -56,6 +56,12 @@ import (
 	uuid "github.com/satori/go.uuid"
 )
 
+var corsHeaders = map[string]string{
+	"Access-Control-Allow-Origin":  "*",
+	"Access-Control-Allow-Methods": "POST, GET, OPTIONS, PUT, DELETE",
+	"Access-Control-Allow-Headers": "auth, content-type",
+}
+
 func index() events.APIGatewayProxyResponse {
 	headers := map[string]string{
 		"Content-Type": "text/html; charset=UTF-8",
@@ -151,20 +157,12 @@ func checkAuth(ctx context.Context, auth string) bool {
 
 func httpExecGet(ctx context.Context, event *events.APIGatewayProxyRequest, res chan<- events.APIGatewayProxyResponse) {
 	bucket := os.Getenv("PROJECT_BUCKET")
-	getRequest := rce.ExecGetRequest{}
-	if event.IsBase64Encoded {
-		data, err := base64.StdEncoding.DecodeString(event.Body)
-		if err != nil {
-			panic(err)
-		}
-		event.Body = string(data)
-	}
-	err := json.Unmarshal([]byte(event.Body), &getRequest)
-	if err != nil {
-		panic(err)
+	getRequest := rce.ExecGetRequest{
+		Uid:       event.QueryStringParameters["uid"],
+		Increment: aws.Int(atoi(event.QueryStringParameters["increment"])),
 	}
 	logKey := fmt.Sprintf("%s/logs.%05d", getRequest.Uid, *getRequest.Increment)
-	_, err = lib.S3Client().HeadObjectWithContext(ctx, &s3.HeadObjectInput{
+	_, err := lib.S3Client().HeadObjectWithContext(ctx, &s3.HeadObjectInput{
 		Bucket: aws.String(bucket),
 		Key:    aws.String(logKey),
 	})
@@ -187,6 +185,7 @@ func httpExecGet(ctx context.Context, event *events.APIGatewayProxyRequest, res 
 		res <- events.APIGatewayProxyResponse{
 			StatusCode: 200,
 			Body:       string(respData),
+			Headers:    corsHeaders,
 		}
 		return
 	}
@@ -217,6 +216,7 @@ func httpExecGet(ctx context.Context, event *events.APIGatewayProxyRequest, res 
 		res <- events.APIGatewayProxyResponse{
 			StatusCode: 200,
 			Body:       string(respData),
+			Headers:    corsHeaders,
 		}
 		return
 	}
@@ -227,6 +227,7 @@ func httpExecGet(ctx context.Context, event *events.APIGatewayProxyRequest, res 
 	res <- events.APIGatewayProxyResponse{
 		StatusCode: 409,
 		Body:       string(respData),
+		Headers:    corsHeaders,
 	}
 }
 
@@ -273,6 +274,7 @@ func httpExecPost(ctx context.Context, event *events.APIGatewayProxyRequest, res
 	res <- events.APIGatewayProxyResponse{
 		StatusCode: 200,
 		Body:       string(data),
+		Headers:    corsHeaders,
 	}
 }
 
@@ -283,6 +285,13 @@ func handleApiEvent(ctx context.Context, event *events.APIGatewayProxyRequest, r
 		return
 	}
 	if strings.HasPrefix(event.Path, "/api/") {
+		if event.HTTPMethod == http.MethodOptions {
+			res <- events.APIGatewayProxyResponse{
+				StatusCode: 200,
+				Headers:    corsHeaders,
+			}
+			return
+		}
 		if !checkAuth(ctx, event.Headers["auth"]) {
 			res <- unauthorized("bad auth")
 			return

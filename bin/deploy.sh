@@ -22,6 +22,6 @@ cat frontend/public/js/main.js >> $temp
 echo '</script>' >> $temp
 cat frontend/public/index.html | grep script -A100 | grep -v script >> $temp
 cat $temp | gzip --best > frontend/public/index.html.gzip
-rm $temp
+rm $temp frontend/public/js/*
 
 cli-aws lambda-ensure backend/*.go 2>&1 | sed 's/^/cli-aws: /'
