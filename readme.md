@@ -54,3 +54,6 @@ bash bin/cli.sh -h        # interact with the service via the cli
   34.219.161.143
   34.219.244.139
   ```
+
+- browser client
+  ![](./screenshot.png)
