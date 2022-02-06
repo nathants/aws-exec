@@ -115,8 +115,7 @@
 
 (def card-style
   {:style {:padding "20px"
-           :margin-bottom "10px"
-           :overflow :scroll}
+           :overflow-x :scroll}
    :class "bg-color"})
 
 (defn auth? []
