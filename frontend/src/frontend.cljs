@@ -124,7 +124,7 @@
 
 (defn scroll-down []
   (mapv #(go
-           (<! (a/timeout (* % 10)))
+           (<! (a/timeout (* % 5)))
            (js/window.scrollTo 0 js/document.body.scrollHeight))
         (range 20)))
 
@@ -147,11 +147,9 @@
                     :value (:search-text @state)
                     :on-focus #(swap! state assoc :search-focus true)
                     :on-blur #(swap! state assoc :search-focus false)
-                    :on-change #(do (swap! state assoc :search-text (target-value %))
-                                    (scroll-down))
+                    :on-change #(swap! state assoc :search-text (target-value %))
                     :style {:width "98%"
-                            :margin "1%"}}])
-     ]
+                            :margin "1%"}}])]
     [:form
      [card card-style
       [text-field {:label "auth"
@@ -240,6 +238,7 @@
                           :search-focus false})
       (let [uid (<! (exec-api-post))]
         (swap! state update-in [:history] conj (:search-text @state))
+        (swap! state update-in [:events] conj (str ">> " (:search-text @state)))
         (swap! state assoc :search-text "")
         (swap! state assoc :offset 0)
         (loop [increment 0]
@@ -250,15 +249,12 @@
                           log-url (:log (:body resp))
                           event (:body (<! (s3-log-get log-url)))]
                       (swap! state update-in [:events] conj event)
-                      (scroll-down)
                       (recur new-increment))
                     (swap! state #(-> %
                                     (update-in [:events] conj (str "exit code: " (:exit_code (:body resp))))
-                                    (assoc :loading false)))
-                    (scroll-down))
+                                    (assoc :loading false))))
               409 (do (<! (a/timeout 50))
                       (recur increment)))))))
-    (scroll-down)
     (prevent-default e)))
 
 (defn keydown-listener [e]
@@ -289,6 +285,10 @@
     (lf-set "auth" text)))
 
 (defwatch :loading
+  (fn [_]
+    (scroll-down)))
+
+(defwatch :events
   (fn [_]
     (scroll-down)))
 
