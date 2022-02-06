@@ -115,6 +115,7 @@
 
 (def card-style
   {:style {:padding "20px"
+           :margin-bottom "10px"
            :overflow-x :scroll}
    :class "bg-color"})
 
