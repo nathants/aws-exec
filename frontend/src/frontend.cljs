@@ -187,11 +187,11 @@
 
 (def api-url "") ;; or "https://$PROJECT_DOMAIN" when using bin/dev.sh
 
-(defn exec-api-post []
+(defn exec-api-post [cmd]
   (go-loop [i 0]
     (let [resp (<! (http/post (str api-url "/api/exec")
                               {:headers {"auth" (blake2b-32 (:auth @state))}
-                               :json-params {:argv ["bash" "-c" (:search-text @state)]}
+                               :json-params {:argv ["bash" "-c" cmd]}
                                :with-credentials? false}))]
       (cond
         (= 401 (:status resp)) (do (swap! state assoc :auth "")
@@ -235,11 +235,12 @@
     (go
       (swap! state merge {:loading true
                           :search-focus false})
-      (let [uid (<! (exec-api-post))]
-        (swap! state update-in [:history] conj (:search-text @state))
-        (swap! state update-in [:events] conj (str ">> " (:search-text @state)))
-        (swap! state assoc :search-text "")
-        (swap! state assoc :offset 0)
+      (let [cmd (:search-text @state)
+            _ (swap! state update-in [:history] conj cmd)
+            _ (swap! state update-in [:events] conj (str ">> " cmd))
+            _ (swap! state assoc :search-text "")
+            _ (swap! state assoc :offset 0)
+            uid (<! (exec-api-post cmd))]
         (loop [increment 0]
           (let [resp (<! (exec-api-get uid increment))]
             (condp = (:status resp)
@@ -263,8 +264,10 @@
     (= "/" (event-key e)) (when-not (:search-focus @state)
                             (swap! state merge {:search-focus true})
                             (prevent-default e))
-    (= "ArrowUp" (event-key e)) (swap! state update-in [:offset] inc)
-    (= "ArrowDown" (event-key e)) (swap! state update-in [:offset] dec)
+    (= "ArrowUp" (event-key e)) (do (swap! state update-in [:offset] inc)
+                                    (prevent-default e))
+    (= "ArrowDown" (event-key e)) (do (swap! state update-in [:offset] dec)
+                                      (prevent-default e))
     :else (log :key (event-key e))))
 
 (defn url []
