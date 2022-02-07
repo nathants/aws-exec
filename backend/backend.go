@@ -33,6 +33,7 @@ import (
 	"net/http"
 	"os/exec"
 	"strconv"
+	"sync"
 
 	"fmt"
 	"io/ioutil"
@@ -376,7 +377,10 @@ func handleAsyncEvent(ctx context.Context, event *rce.ExecAsyncEvent) {
 		doneCount := 0
 		toShip := []string{}
 		lastShipped := time.Now()
+		shipLogsLock := sync.RWMutex{}
 		shipLogs := func() {
+			shipLogsLock.Lock()
+			defer shipLogsLock.Unlock()
 			key := fmt.Sprintf("%s/logs.%05d", event.Uid, increment)
 			_, err := lib.S3Client().PutObjectWithContext(context.Background(), &s3.PutObjectInput{
 				Bucket: aws.String(bucket),
