@@ -298,8 +298,9 @@
 
 (defwatch :offset
   (fn [val]
-    (let [n (mod val (count (:history @state)))]
-      (swap! state assoc :search-text (nth (:history @state) n)))))
+    (when (not= 0 val)
+      (let [n (mod (dec val) (count (:history @state)))]
+        (swap! state assoc :search-text (nth (:history @state) n))))))
 
 (defwatch :search-focus
   (fn [val]
