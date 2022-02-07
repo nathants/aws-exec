@@ -190,7 +190,8 @@
 
 (defn exec-api-post [cmd]
   (go-loop [i 0]
-    (let [resp (<! (http/post (str api-url "/api/exec")
+    (let [cmd (str "export PATH=$(pwd):$PATH; " cmd)
+          resp (<! (http/post (str api-url "/api/exec")
                               {:headers {"auth" (blake2b-32 (:auth @state))}
                                :json-params {:argv ["bash" "-c" cmd]}
                                :with-credentials? false}))]
