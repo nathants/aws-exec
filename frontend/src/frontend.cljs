@@ -151,7 +151,7 @@
                             :margin "1%"}}])]
     [:form
      [card card-style
-      [text-field {:label "auth"
+      [text-field {:label "paste auth token here"
                    :value (:auth @state)
                    :type :password
                    :on-change #(swap! state assoc :auth (target-value %))
