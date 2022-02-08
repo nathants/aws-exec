@@ -151,9 +151,18 @@ func checkAuth(ctx context.Context, auth string) bool {
 		Key:            key,
 	})
 	if err != nil {
-		panic(err)
+		return false
 	}
-	return len(out.Item) != 0
+	val := rce.Record{}
+	err = dynamodbattribute.UnmarshalMap(out.Item, &val)
+	if err != nil {
+		return false
+	}
+	if val.Value == "" {
+		return false
+	}
+	lib.Logger.Println("auth:", val.Value)
+	return true
 }
 
 func httpExecGet(ctx context.Context, event *events.APIGatewayProxyRequest, res chan<- events.APIGatewayProxyResponse) {
