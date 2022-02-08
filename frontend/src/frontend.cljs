@@ -13,8 +13,7 @@
             [reagent-mui.material.card :refer [card]]
             [reagent-mui.material.text-field :refer [text-field]]
             [reagent-mui.material.container :refer [container]]
-            [reagent-mui.material.linear-progress :refer [linear-progress]]
-            [reagent-mui.material.button :refer [button]]))
+            [reagent-mui.material.linear-progress :refer [linear-progress]]))
 
 (set! *warn-on-infer* true)
 
@@ -156,9 +155,7 @@
                    :value (:auth @state)
                    :type :password
                    :on-change #(swap! state assoc :auth (target-value %))
-                   :style {:width "100%"}} ]]
-     [card card-style
-      [button {:style {:padding "10px" :border "solid rgba(0, 0, 0, .25) 1px" :width "100%"}} "submit"]]]))
+                   :style {:width "100%"}} ]]]))
 
 (defn component-not-found []
   [:div
