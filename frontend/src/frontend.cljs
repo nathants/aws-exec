@@ -193,7 +193,9 @@
                                :json-params {:argv ["bash" "-c" cmd]}
                                :with-credentials? false}))]
       (cond
-        (= 401 (:status resp)) (do (swap! state assoc :auth "")
+        (= 401 (:status resp)) (do (swap! state update-in [:history] butlast)
+                                   (swap! state update-in [:events] butlast)
+                                   (swap! state assoc :auth "")
                                    (swap! state assoc :loading false)
                                    (throw "bad auth"))
         (= 200 (:status resp)) (:uid (:body resp))
