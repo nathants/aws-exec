@@ -390,6 +390,11 @@ func handleAsyncEvent(ctx context.Context, event *rce.ExecAsyncEvent) {
 		shipLogs := func() {
 			shipLogsLock.Lock()
 			defer shipLogsLock.Unlock()
+			val := strings.Join(toShip, "\n")
+			val = strings.Trim(val, " \n")
+			if val == "" {
+				return
+			}
 			key := fmt.Sprintf("%s/logs.%05d", event.Uid, increment)
 			_, err := lib.S3Client().PutObjectWithContext(context.Background(), &s3.PutObjectInput{
 				Bucket: aws.String(bucket),
