@@ -343,8 +343,8 @@ func unauthorized(body string) events.APIGatewayProxyResponse {
 
 func logRecover(r interface{}, res chan<- events.APIGatewayProxyResponse) {
 	stack := string(debug.Stack())
-	fmt.Println(r)
-	fmt.Println(stack)
+	lib.Logger.Println(r)
+	lib.Logger.Println(stack)
 	res <- events.APIGatewayProxyResponse{
 		StatusCode: 500,
 		Body:       fmt.Sprint(r) + "\n" + stack,
@@ -478,17 +478,51 @@ func handle(ctx context.Context, event map[string]interface{}, res chan<- events
 }
 
 func handleRequest(ctx context.Context, event map[string]interface{}) (events.APIGatewayProxyResponse, error) {
+	setupLogging()
+	defer lib.Logger.Flush()
 	start := time.Now()
 	res := make(chan events.APIGatewayProxyResponse)
 	go handle(ctx, event, res)
 	r := <-res
 	path, ok := event["path"]
 	if ok {
-		fmt.Println(r.StatusCode, path, time.Since(start))
+		lib.Logger.Println(r.StatusCode, path, time.Since(start))
 	} else {
-		fmt.Println(fmt.Sprintf("%#v", event), time.Since(start))
+		lib.Logger.Println(fmt.Sprintf("%#v", event), time.Since(start))
 	}
 	return r, nil
+}
+
+func setupLogging() {
+	lock := sync.RWMutex{}
+	var lines []string
+	lib.Logger = &lib.LoggerStruct{
+		Print: func(args ...interface{}) {
+			lock.Lock()
+			lines = append(lines, fmt.Sprint(args...))
+			lock.Unlock()
+		},
+		Flush: func() {
+			lock.Lock()
+			text := strings.Join(lines, "\n")
+			uid := uuid.NewV4().String()
+			unix := time.Now().Unix()
+			key := fmt.Sprintf("logs/%d.%s", unix, uid)
+			err := lib.Retry(context.Background(), func() error {
+				_, err := lib.S3Client().PutObjectWithContext(context.Background(), &s3.PutObjectInput{
+					Bucket: aws.String(os.Getenv("PROJECT_BUCKET")),
+					Key:    aws.String(key),
+					Body:   bytes.NewReader([]byte(text)),
+				})
+				return err
+			})
+			if err != nil {
+				lib.Logger.Println("error:", err)
+				return
+			}
+			lock.Unlock()
+		},
+	}
 }
 
 func main() {

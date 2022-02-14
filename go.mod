@@ -5,11 +5,11 @@ go 1.17
 require (
 	github.com/alexflint/go-arg v1.4.2
 	github.com/aws/aws-lambda-go v1.28.0
-	github.com/aws/aws-sdk-go v1.42.52
+	github.com/aws/aws-sdk-go v1.42.53
 	github.com/mitchellh/mapstructure v1.4.3
-	github.com/nathants/cli-aws v0.0.0-20220210071917-cd1b9cf4b3e5
+	github.com/nathants/cli-aws v0.0.0-20220212081758-4e337cd3eb73
 	github.com/satori/go.uuid v1.2.0
-	golang.org/x/crypto v0.0.0-20220210151621-f4118a5b28e2
+	golang.org/x/crypto v0.0.0-20220214200702-86341886e292
 )
 
 require (
@@ -20,7 +20,7 @@ require (
 	github.com/mattn/go-isatty v0.0.14 // indirect
 	github.com/mikesmitty/edkey v0.0.0-20170222072505-3356ea4e686a // indirect
 	github.com/pkg/term v1.1.0 // indirect
-	github.com/r3labs/diff/v2 v2.14.8 // indirect
+	github.com/r3labs/diff/v2 v2.15.0 // indirect
 	github.com/tidwall/pretty v1.2.0 // indirect
 	github.com/vmihailenco/msgpack v4.0.4+incompatible // indirect
 	golang.org/x/net v0.0.0-20211216030914-fe4d6282115f // indirect
