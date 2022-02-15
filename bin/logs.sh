@@ -14,8 +14,11 @@ while true; do
         # if we haven't already printed the log
         if ! grep $log $seen &>/dev/null; then
 
-            # print it
-            cli-aws s3-get s3://$PROJECT_BUCKET/$log | grep -v '^ *$'
+            # echo new source
+            echo logs: s3://$PROJECT_BUCKET/$log
+
+            # print it, excluding blank lines
+            cli-aws s3-get s3://$PROJECT_BUCKET/$log
 
             # mark it as seen, and prune old seen data
             updated_seen=$(mktemp)

@@ -478,36 +478,44 @@ func handle(ctx context.Context, event map[string]interface{}, res chan<- events
 }
 
 func handleRequest(ctx context.Context, event map[string]interface{}) (events.APIGatewayProxyResponse, error) {
-	setupLogging()
+	setupLogging(ctx)
 	defer lib.Logger.Flush()
 	start := time.Now()
 	res := make(chan events.APIGatewayProxyResponse)
 	go handle(ctx, event, res)
 	r := <-res
 	path, ok := event["path"]
+	ts := time.Now().UTC().Format(time.RFC3339)
 	if ok {
-		lib.Logger.Println(r.StatusCode, path, time.Since(start))
+		lib.Logger.Println(r.StatusCode, path, time.Since(start), ts)
 	} else {
-		lib.Logger.Println(fmt.Sprintf("%#v", event), time.Since(start))
+		lib.Logger.Println(fmt.Sprintf("%#v", event), time.Since(start), ts)
 	}
 	return r, nil
 }
 
-func setupLogging() {
+func setupLogging(ctx context.Context) {
 	lock := sync.RWMutex{}
 	var lines []string
+	uid := uuid.NewV4().String()
+	count := 0
 	lib.Logger = &lib.LoggerStruct{
 		Print: func(args ...interface{}) {
 			lock.Lock()
+			defer lock.Unlock()
 			lines = append(lines, fmt.Sprint(args...))
-			lock.Unlock()
 		},
 		Flush: func() {
 			lock.Lock()
-			text := strings.Join(lines, "\n")
-			uid := uuid.NewV4().String()
+			defer lock.Unlock()
+			if len(lines) == 0 {
+				return
+			}
+			text := strings.Join(lines, "")
+			lines = nil
 			unix := time.Now().Unix()
-			key := fmt.Sprintf("logs/%d.%s", unix, uid)
+			key := fmt.Sprintf("logs/%d.%s.%03d", unix, uid, count)
+			count++
 			err := lib.Retry(context.Background(), func() error {
 				_, err := lib.S3Client().PutObjectWithContext(context.Background(), &s3.PutObjectInput{
 					Bucket: aws.String(os.Getenv("PROJECT_BUCKET")),
@@ -520,9 +528,19 @@ func setupLogging() {
 				lib.Logger.Println("error:", err)
 				return
 			}
-			lock.Unlock()
 		},
 	}
+	go func() {
+		for {
+			lib.Logger.Flush()
+			select {
+			case <-ctx.Done():
+				return
+			default:
+				time.Sleep(5 * time.Second)
+			}
+		}
+	}()
 }
 
 func main() {
