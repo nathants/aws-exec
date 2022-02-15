@@ -2,6 +2,7 @@
   (:require-macros [cljs.core.async.macros :refer [go go-loop]])
   (:require ["libsodium-wrappers" :as sodium]
             ["localforage" :as localforage]
+            [lambdaisland.ansi :as ansi]
             [cljs-http.client :as http]
             [cljs.core.async :refer [<! >! chan put! close! timeout] :as a]
             [cljs.pprint]
@@ -131,8 +132,8 @@
   (if (auth?)
     [:<>
      (for [[i event] (map vector (range) (:events @state))]
-       ^{:key i} [card card-style
-                  [:div {:style {:white-space :pre}} event]])
+       ^{:key i} [card (assoc-in card-style [:style :white-space] :pre)
+                  [:<> (ansi/text->hiccup event)]])
      (if (:loading @state)
        [card card-style
         [linear-progress {:style {:height "13px"}}] ]
