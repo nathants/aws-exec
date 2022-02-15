@@ -31,8 +31,6 @@ func authRm() {
 	arg.MustParse(&args)
 
 	table := os.Getenv("PROJECT_NAME")
-	_ = os.Getenv("PROJECT_DOMAIN")
-	_ = os.Getenv("AUTH")
 
 	id := args.Auth
 	if !strings.HasPrefix(id, "auth.") {

@@ -31,7 +31,6 @@ func authLs() {
 
 	table := os.Getenv("PROJECT_NAME")
 	_ = os.Getenv("PROJECT_DOMAIN")
-	_ = os.Getenv("AUTH")
 
 	var start map[string]*dynamodb.AttributeValue
 	for {

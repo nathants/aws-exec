@@ -30,8 +30,6 @@ func authNew() {
 	arg.MustParse(&args)
 
 	table := os.Getenv("PROJECT_NAME")
-	_ = os.Getenv("PROJECT_DOMAIN")
-	_ = os.Getenv("AUTH")
 
 	key := rce.RandKey()
 	item, err := dynamodbattribute.MarshalMap(rce.Record{
