@@ -140,6 +140,7 @@
        [text-field {:label "aws-rce terminal"
                     :id "search"
                     :autoComplete "off"
+                    :spellCheck false
                     :multiline true
                     :fullWidth true
                     :autoFocus true
@@ -246,15 +247,15 @@
         (loop [increment 0]
           (let [resp (<! (exec-api-get uid increment))]
             (condp = (:status resp)
-              200 (if (not (s/blank? (:log (:body resp))))
+              200 (if-let [exit-code (:exit_code (:body resp))]
+                    (swap! state #(-> %
+                                    (update-in [:events] conj (str "exit code: " exit-code))
+                                    (assoc :loading false)))
                     (let [new-increment (:increment (:body resp))
                           log-url (:log (:body resp))
                           event (:body (<! (s3-log-get log-url)))]
                       (swap! state update-in [:events] conj event)
-                      (recur new-increment))
-                    (swap! state #(-> %
-                                    (update-in [:events] conj (str "exit code: " (:exit_code (:body resp))))
-                                    (assoc :loading false))))
+                      (recur new-increment)))
               409 (do (<! (a/timeout 50))
                       (recur increment)))))))
     (prevent-default e)))
