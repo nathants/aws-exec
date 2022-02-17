@@ -101,7 +101,8 @@
     :search-text ""
     :events []
     :loading false
-    :page nil}))
+    :page nil
+    :first-load? true}))
 
 (def style
   (garden/css
@@ -127,54 +128,6 @@
            (<! (a/timeout (* % 5)))
            (js/window.scrollTo 0 js/document.body.scrollHeight))
         (range 20)))
-
-(defn component-home []
-  (if (auth?)
-    [:<>
-     (for [[i event] (map vector (range) (:events @state))]
-       ^{:key i} [card (assoc-in card-style [:style :white-space] :pre)
-                  [:<> (ansi/text->hiccup event)]])
-     (if (:loading @state)
-       [card card-style
-        [linear-progress {:style {:height "13px"}}] ]
-       [text-field {:label "aws-rce terminal"
-                    :id "search"
-                    :autoComplete "off"
-                    :spellCheck false
-                    :multiline true
-                    :fullWidth true
-                    :autoFocus true
-                    :focused (:search-focus @state)
-                    :value (:search-text @state)
-                    :on-focus #(swap! state assoc :search-focus true)
-                    :on-blur #(swap! state assoc :search-focus false)
-                    :on-change #(swap! state assoc :search-text (target-value %))
-                    :style {:width "98%"
-                            :margin "1%"}}])]
-    [:form
-     [card card-style
-      [text-field {:label "paste auth token here"
-                   :value (:auth @state)
-                   :type :password
-                   :on-change #(swap! state assoc :auth (target-value %))
-                   :style {:width "100%"}} ]]]))
-
-(defn component-not-found []
-  [:div
-   [:p "404"]])
-
-(defn component-main []
-  [container {:id "content" :style {:padding 0 :margin-top "10px"}}
-   [(:page @state)]])
-
-(defn component-root []
-  [:<>
-   [:style style]
-   [component-main]])
-
-(def router
-  [["/" component-home]
-   ["(.*)" component-not-found]])
 
 (defn mousedown-listener [e]
   nil)
@@ -233,36 +186,36 @@
         :else (do (<! (a/timeout (* i 10)))
                   (recur (inc i)))))))
 
-(defn submit-command [e]
-  (when (:search-focus @state)
-    (go
-      (swap! state merge {:loading true
-                          :search-focus false})
-      (let [cmd (:search-text @state)
-            _ (swap! state update-in [:history] conj cmd)
-            _ (swap! state update-in [:events] conj (str ">> " cmd))
-            _ (swap! state assoc :search-text "")
-            _ (swap! state assoc :offset 0)
-            uid (<! (exec-api-post cmd))]
-        (loop [increment 0]
-          (let [resp (<! (exec-api-get uid increment))]
-            (condp = (:status resp)
-              200 (if-let [exit-code (:exit_code (:body resp))]
-                    (swap! state #(-> %
-                                    (update-in [:events] conj (str "exit code: " exit-code))
-                                    (assoc :loading false)))
-                    (let [new-increment (:increment (:body resp))
-                          log-url (:log (:body resp))
-                          event (:body (<! (s3-log-get log-url)))]
-                      (swap! state update-in [:events] conj event)
-                      (recur new-increment)))
-              409 (do (<! (a/timeout 50))
-                      (recur increment)))))))
-    (prevent-default e)))
+(defn submit-command []
+  (go
+    (swap! state merge {:loading true
+                        :search-focus false})
+    (let [cmd (:search-text @state)
+          _ (swap! state update-in [:history] conj cmd)
+          _ (swap! state update-in [:events] conj (str ">> " cmd))
+          _ (swap! state assoc :search-text "")
+          _ (swap! state assoc :offset 0)
+          uid (<! (exec-api-post cmd))]
+      (loop [increment 0]
+        (let [resp (<! (exec-api-get uid increment))]
+          (condp = (:status resp)
+            200 (if-let [exit-code (:exit_code (:body resp))]
+                  (swap! state #(-> %
+                                  (update-in [:events] conj (str "exit code: " exit-code))
+                                  (assoc :loading false)))
+                  (let [new-increment (:increment (:body resp))
+                        log-url (:log (:body resp))
+                        event (:body (<! (s3-log-get log-url)))]
+                    (swap! state update-in [:events] conj event)
+                    (recur new-increment)))
+            409 (do (<! (a/timeout 50))
+                    (recur increment))))))))
 
 (defn keydown-listener [e]
   (cond
-    (= "Enter" (event-key e)) (submit-command e)
+    (= "Enter" (event-key e)) (when (:search-focus @state)
+                                (submit-command)
+                                (prevent-default e))
     (#{"INPUT" "TEXTAREA"} (.-tagName js/document.activeElement)) nil
     (= "/" (event-key e)) (when-not (:search-focus @state)
                             (swap! state merge {:search-focus true})
@@ -316,6 +269,73 @@
     (when-not (key @state)
       (.addEventListener js/document name f)
       (swap! state assoc key true))))
+
+(defn init-on-first-load []
+  (when (:first-load? @state)
+    (swap! state assoc :first-load? false)
+    (let [params (last (s/split js/window.location.href #"\?"))
+          params (s/split params #"&")
+          params (map #(s/split % #"=") params)
+          params (filter #(= 2 (count %)) params)
+          params (flatten params)
+          params (apply hash-map params)]
+      (when-let [cmd (get params "cmd")]
+        (log "hello" cmd)
+        (swap! state assoc :search-text (js/decodeURIComponent cmd))
+        (submit-command))
+      nil)))
+
+(defn with-random-key [xs]
+  (map #(with-meta % {:key (str (js/Math.random))}) xs))
+
+(defn component-home []
+  (if (auth?)
+    [:<>
+     (init-on-first-load)
+     (for [[i event] (map vector (range) (:events @state))]
+       ^{:key i} [card (assoc-in card-style [:style :white-space] :pre)
+                  [:<> (with-random-key (ansi/text->hiccup event))]])
+     (if (:loading @state)
+       [card card-style
+        [linear-progress {:style {:height "13px"}}] ]
+       [text-field {:label "slim.ai rce"
+                    :id "search"
+                    :autoComplete "off"
+                    :spellCheck false
+                    :multiline true
+                    :fullWidth true
+                    :autoFocus true
+                    :focused (:search-focus @state)
+                    :value (:search-text @state)
+                    :on-focus #(swap! state assoc :search-focus true)
+                    :on-blur #(swap! state assoc :search-focus false)
+                    :on-change #(swap! state assoc :search-text (target-value %))
+                    :style {:width "98%"
+                            :margin "1%"}}])]
+    [:form
+     [card card-style
+      [text-field {:label "paste auth token here"
+                   :value (:auth @state)
+                   :type :password
+                   :on-change #(swap! state assoc :auth (target-value %))
+                   :style {:width "100%"}} ]]]))
+
+(defn component-not-found []
+  [:div
+   [:p "404"]])
+
+(defn component-main []
+  [container {:id "content" :style {:padding 0 :margin-top "10px"}}
+   [(:page @state)]])
+
+(defn component-root []
+  [:<>
+   [:style style]
+   [component-main]])
+
+(def router
+  [["/" component-home]
+   ["(.*)" component-not-found]])
 
 (defn start-router []
   (bide/start! (bide/router router) {:default "/"
