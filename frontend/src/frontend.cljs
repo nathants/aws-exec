@@ -194,7 +194,7 @@
                         :search-focus false})
     (let [cmd (:search-text @state)
           _ (swap! state update-in [:history] conj cmd)
-          _ (swap! state update-in [:events] #(take-last (conj % (str ">> " cmd)) max-events))
+          _ (swap! state update-in [:events] #(take-last max-events (conj % (str ">> " cmd))))
           _ (swap! state assoc :search-text "")
           _ (swap! state assoc :offset 0)
           uid (<! (exec-api-post cmd))]
@@ -208,7 +208,7 @@
                   (let [new-increment (:increment (:body resp))
                         log-url (:log (:body resp))
                         event (:body (<! (s3-log-get log-url)))]
-                    (swap! state update-in [:events] #(take-last (conj % event) max-events))
+                    (swap! state update-in [:events] #(take-last max-events (conj % event)))
                     (recur new-increment)))
             409 (do (<! (a/timeout 50))
                     (recur increment))))))))
