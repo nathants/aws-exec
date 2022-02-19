@@ -18,7 +18,7 @@ while true; do
             echo logs: s3://$PROJECT_BUCKET/$log
 
             # print it, excluding blank lines
-            cli-aws s3-get s3://$PROJECT_BUCKET/$log
+            cli-aws s3-get s3://$PROJECT_BUCKET/$log &
 
             # mark it as seen, and prune old seen data
             updated_seen=$(mktemp)
