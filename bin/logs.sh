@@ -17,6 +17,14 @@ while true; do
             # echo new source
             echo logs: s3://$PROJECT_BUCKET/$log
 
+            # check max concurrency
+            while true; do
+                if [ $(ps -ef | grep "cli-aws s3-get s3://$PROJECT_BUCKET" | wc -l) -lt 8 ]; then
+                    break
+                fi
+                sleep .1
+            done
+
             # print it, excluding blank lines
             cli-aws s3-get s3://$PROJECT_BUCKET/$log &
 
