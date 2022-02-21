@@ -353,7 +353,7 @@ func logRecover(r interface{}, res chan<- events.APIGatewayProxyResponse) {
 
 func handleAsyncEvent(ctx context.Context, event *rce.ExecAsyncEvent) {
 	bucket := os.Getenv("PROJECT_BUCKET")
-	ctx, cancel := context.WithTimeout(ctx, 14*time.Minute+45*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 14*time.Minute)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, event.Argv[0], event.Argv[1:]...)
 	stdout, err := cmd.StdoutPipe()
