@@ -171,7 +171,8 @@ func httpExecGet(ctx context.Context, event *events.APIGatewayProxyRequest, res 
 		Uid:       event.QueryStringParameters["uid"],
 		Increment: aws.Int(atoi(event.QueryStringParameters["increment"])),
 	}
-	logKey := fmt.Sprintf("%s/logs.%05d", getRequest.Uid, *getRequest.Increment)
+	// check for log N
+	logKey := fmt.Sprintf("jobs/%s/logs.%05d", getRequest.Uid, *getRequest.Increment)
 	_, err := lib.S3Client().HeadObjectWithContext(ctx, &s3.HeadObjectInput{
 		Bucket: aws.String(bucket),
 		Key:    aws.String(logKey),
@@ -199,7 +200,8 @@ func httpExecGet(ctx context.Context, event *events.APIGatewayProxyRequest, res 
 		}
 		return
 	}
-	exitKey := fmt.Sprintf("%s/exit", getRequest.Uid)
+	// on log N miss, check for exit code
+	exitKey := fmt.Sprintf("jobs/%s/exit", getRequest.Uid)
 	_, err = lib.S3Client().HeadObjectWithContext(ctx, &s3.HeadObjectInput{
 		Bucket: aws.String(bucket),
 		Key:    aws.String(exitKey),
@@ -254,7 +256,7 @@ func httpExecPost(ctx context.Context, event *events.APIGatewayProxyRequest, res
 	if err != nil {
 		panic(fmt.Sprint(event.Body, err))
 	}
-	uid := uuid.NewV4().String()
+	uid := fmt.Sprintf("%d.%s", time.Now().Unix(), uuid.NewV4().String())
 	data, err := json.Marshal(rce.ExecAsyncEvent{
 		EventType: rce.EventExec,
 		Uid:       uid,
@@ -395,7 +397,7 @@ func handleAsyncEvent(ctx context.Context, event *rce.ExecAsyncEvent) {
 			if val == "" {
 				return
 			}
-			key := fmt.Sprintf("%s/logs.%05d", event.Uid, increment)
+			key := fmt.Sprintf("jobs/%s/logs.%05d", event.Uid, increment)
 			err = lib.Retry(ctx, func() error {
 				_, err := lib.S3Client().PutObjectWithContext(context.Background(), &s3.PutObjectInput{
 					Bucket: aws.String(bucket),
@@ -428,13 +430,17 @@ func handleAsyncEvent(ctx context.Context, event *rce.ExecAsyncEvent) {
 			}
 		}
 	}()
-	err = cmd.Run()
+	err = cmd.Start()
+	if err != nil {
+	    panic(err)
+	}
+	<-logsDone
 	exitCode := 0
+	err = cmd.Wait()
 	if err != nil {
 		exitCode = 1
 	}
-	<-logsDone
-	key := fmt.Sprintf("%s/exit", event.Uid)
+	key := fmt.Sprintf("jobs/%s/exit", event.Uid)
 	err = lib.Retry(ctx, func() error {
 		_, err := lib.S3Client().PutObjectWithContext(context.Background(), &s3.PutObjectInput{
 			Bucket: aws.String(bucket),
