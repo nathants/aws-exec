@@ -207,6 +207,37 @@ func httpExecGet(ctx context.Context, event *events.APIGatewayProxyRequest, res 
 		Key:    aws.String(exitKey),
 	})
 	if err == nil {
+
+		// on exit hit, check once more for logs since log N and exit could both be written after inital miss for log N
+		_, err := lib.S3Client().HeadObjectWithContext(ctx, &s3.HeadObjectInput{
+			Bucket: aws.String(bucket),
+			Key:    aws.String(logKey),
+		})
+		if err == nil {
+			req, _ := lib.S3Client().GetObjectRequest(&s3.GetObjectInput{
+				Bucket: aws.String(bucket),
+				Key:    aws.String(logKey),
+			})
+			url, err := req.Presign(60 * time.Second)
+			if err != nil {
+				panic(err)
+			}
+			respData, err := json.Marshal(rce.ExecGetResponse{
+				Increment: aws.Int(*getRequest.Increment + 1),
+				LogUrl:    url,
+			})
+			if err != nil {
+				panic(err)
+			}
+			res <- events.APIGatewayProxyResponse{
+				StatusCode: 200,
+				Body:       string(respData),
+				Headers:    corsHeaders,
+			}
+			return
+		}
+
+		// on second log miss, return exit
 		out, err := lib.S3Client().GetObjectWithContext(ctx, &s3.GetObjectInput{
 			Bucket: aws.String(bucket),
 			Key:    aws.String(exitKey),
@@ -232,6 +263,8 @@ func httpExecGet(ctx context.Context, event *events.APIGatewayProxyRequest, res 
 		}
 		return
 	}
+
+	// no data, wait
 	respData, err := json.Marshal(rce.ExecGetResponse{})
 	if err != nil {
 		panic(err)
