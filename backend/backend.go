@@ -421,10 +421,7 @@ func handleAsyncEvent(ctx context.Context, event *rce.ExecAsyncEvent) {
 		doneCount := 0
 		toShip := []string{}
 		lastShipped := time.Now()
-		shipLogsLock := sync.RWMutex{}
 		shipLogs := func() {
-			shipLogsLock.Lock()
-			defer shipLogsLock.Unlock()
 			val := strings.Join(toShip, "\n")
 			val = strings.Trim(val, " \n")
 			if val == "" {
