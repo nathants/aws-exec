@@ -8,25 +8,30 @@ trap "rm -f $seen || true" EXIT
 
 while true; do
 
-    # list all logs younger than 1 minute
-    cli-aws s3-ls -r $PROJECT_BUCKET/logs/$(date --utc --date="1 minute ago" +%s) | awk '{print $4}' | while read log; do
+    # list all logs younger than n minutes
+    cli-aws s3-ls -r $PROJECT_BUCKET/logs/$(date --utc --date="${start:-1 minute ago}" +%s) | awk '{print $4}' | while read log; do
 
         # if we haven't already printed the log
         if ! grep $log $seen &>/dev/null; then
 
             # echo new source
-            echo logs: s3://$PROJECT_BUCKET/$log
+            echo logs: s3://$PROJECT_BUCKET/$log 1>&2
 
-            # check max concurrency
-            while true; do
-                if [ $(ps -ef | grep "cli-aws s3-get s3://$PROJECT_BUCKET" | wc -l) -lt 8 ]; then
-                    break
-                fi
-                sleep .1
-            done
 
             # print it, excluding blank lines
-            cli-aws s3-get s3://$PROJECT_BUCKET/$log &
+            if [ -n "${serial:-}" ]; then
+                cli-aws s3-get s3://$PROJECT_BUCKET/$log
+            else
+
+                # check max concurrency
+                while true; do
+                    if [ $(ps -ef | grep "cli-aws s3-get s3://$PROJECT_BUCKET" | wc -l) -lt 64 ]; then
+                        break
+                    fi
+                    sleep .1
+                done
+                cli-aws s3-get s3://$PROJECT_BUCKET/$log &
+            fi
 
             # mark it as seen, and prune old seen data
             updated_seen=$(mktemp)
@@ -35,7 +40,13 @@ while true; do
             mv -f $updated_seen $seen
 
         fi
+
     done
+
+    # if start specified exit immediately
+    if [ -n "${start:-}" ]; then
+        break
+    fi
 
     sleep 1
 done
