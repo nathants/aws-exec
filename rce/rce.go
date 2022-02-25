@@ -115,6 +115,8 @@ func Exec(ctx context.Context, url, auth string, argv []string, logDataCallback 
 		return -1, err
 	}
 
+	lib.Logger.Println("uid:", postResponse.Uid)
+
 	increment := 0
 	for {
 		getResp := ExecGetResponse{}
