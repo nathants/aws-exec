@@ -429,7 +429,7 @@ func handleAsyncEvent(ctx context.Context, event *rce.ExecAsyncEvent) {
 			}
 			key := fmt.Sprintf("jobs/%s/logs.%05d", event.Uid, increment)
 			err = lib.Retry(ctx, func() error {
-				_, err := lib.S3Client().PutObjectWithContext(context.Background(), &s3.PutObjectInput{
+				_, err := lib.S3Client().PutObject(&s3.PutObjectInput{
 					Bucket: aws.String(bucket),
 					Key:    aws.String(key),
 					Body:   bytes.NewReader([]byte(val)),
@@ -472,7 +472,7 @@ func handleAsyncEvent(ctx context.Context, event *rce.ExecAsyncEvent) {
 	}
 	key := fmt.Sprintf("jobs/%s/exit", event.Uid)
 	err = lib.Retry(ctx, func() error {
-		_, err := lib.S3Client().PutObjectWithContext(context.Background(), &s3.PutObjectInput{
+		_, err := lib.S3Client().PutObject(&s3.PutObjectInput{
 			Bucket: aws.String(bucket),
 			Key:    aws.String(key),
 			Body:   bytes.NewReader([]byte(fmt.Sprint(exitCode))),
@@ -553,7 +553,7 @@ func setupLogging(ctx context.Context) {
 			key := fmt.Sprintf("logs/%d.%s.%03d", unix, uid, count)
 			count++
 			err := lib.Retry(context.Background(), func() error {
-				_, err := lib.S3Client().PutObjectWithContext(context.Background(), &s3.PutObjectInput{
+				_, err := lib.S3Client().PutObject(&s3.PutObjectInput{
 					Bucket: aws.String(os.Getenv("PROJECT_BUCKET")),
 					Key:    aws.String(key),
 					Body:   bytes.NewReader([]byte(text)),
