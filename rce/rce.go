@@ -87,7 +87,6 @@ func Exec(ctx context.Context, url, auth string, argv []string, logDataCallback 
 		}
 		out, err := client.Do(req)
 		if err != nil {
-			lib.Logger.Println("error:", err)
 			return err
 		}
 		defer func() { _ = out.Body.Close() }()
