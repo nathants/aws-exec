@@ -29,19 +29,17 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
-	"io"
-	"net/http"
-	"os/exec"
-	"strconv"
-	"sync"
-
 	"fmt"
+	"io"
 	"io/ioutil"
 	"mime"
-
+	"net/http"
 	"os"
+	"os/exec"
 	"runtime/debug"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/aws/aws-lambda-go/events"
@@ -462,7 +460,7 @@ func handleAsyncEvent(ctx context.Context, event *rce.ExecAsyncEvent) {
 	}()
 	err = cmd.Start()
 	if err != nil {
-	    panic(err)
+		panic(err)
 	}
 	<-logsDone
 	exitCode := 0
