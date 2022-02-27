@@ -458,15 +458,17 @@ func handleAsyncEvent(ctx context.Context, event *rce.ExecAsyncEvent) {
 			}
 		}
 	}()
+	exitCode := 0
 	err = cmd.Start()
 	if err != nil {
-		panic(err)
-	}
-	<-logsDone
-	exitCode := 0
-	err = cmd.Wait()
-	if err != nil {
+		lib.Logger.Println("error:", err)
 		exitCode = 1
+	} else {
+		<-logsDone
+		err = cmd.Wait()
+		if err != nil {
+			exitCode = 1
+		}
 	}
 	key := fmt.Sprintf("jobs/%s/exit", event.Uid)
 	err = lib.Retry(ctx, func() error {
