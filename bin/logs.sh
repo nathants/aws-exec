@@ -11,14 +11,14 @@ while true; do
     # list all logs younger than n minutes
     cli-aws s3-ls -r $PROJECT_BUCKET/logs/$(date --utc --date="${start:-1 minute ago}" +%s) | awk '{print $4}' | while read log; do
 
-        # if we haven't already printed the log
+        # if we haven't already seen it
         if ! grep $log $seen &>/dev/null; then
 
             # echo new source
             echo logs: s3://$PROJECT_BUCKET/$log 1>&2
 
 
-            # print it, excluding blank lines
+            # print it
             if [ -n "${serial:-}" ]; then
                 cli-aws s3-get s3://$PROJECT_BUCKET/$log
             else
