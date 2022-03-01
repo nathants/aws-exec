@@ -1,4 +1,4 @@
-cli
+aws-rce
 env.sh
 *.gzip
 frontend/public/js/

@@ -1,7 +1,7 @@
 #!/bin/bash
 set -eou pipefail
 
-which staticcheck >/dev/null || (cd ~ && go get -u github.com/dominikh/go-tools/cmd/staticcheck)
+which staticcheck >/dev/null || (cd ~ && go get -u honnef.co/go/tools/cmd/staticcheck)
 which golint      >/dev/null || (cd ~ && go get -u golang.org/x/lint/golint)
 which ineffassign >/dev/null || (cd ~ && go get -u github.com/gordonklaus/ineffassign)
 which errcheck    >/dev/null || (cd ~ && go get -u github.com/kisielk/errcheck)
