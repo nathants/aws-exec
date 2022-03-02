@@ -8,7 +8,7 @@ sometimes remote code execution is exactly what's needed, like for continuous in
 
 adhoc execution in lambda with streaming logs, exitcode, and 15 minutes max duration.
 
-## install
+## deploy
 
 ```bash
 go install github.com/nathants/cli-aws@latest
@@ -17,6 +17,31 @@ bash bin/check.sh         # lint
 bash bin/deploy.sh        # ensure aws infra and deploy prod release
 bash bin/dev.sh           # rapidly iterate by updating lambda zip
 bash bin/cli.sh -h        # interact with the service via the cli
+```
+
+## deploy with docker
+
+```bash
+cp env.sh.template env.sh # update values
+docker build -t aws-rce:latest .
+docker run -it --rm \
+    -v $(pwd):/code \
+    -e AWS_DEFAULT_REGION \
+    -e AWS_ACCESS_KEY_ID \
+    -e AWS_SECRET_ACCESS_KEY \
+    aws-rce:latest \
+    bash -c '
+        cd /code
+        bash bin/deploy.sh
+    '
+```
+
+## go install cli client
+
+```bash
+go install github.com/nathants/aws-rce@latest
+source env.sh
+~/go/bin/aws-rce exec whoami
 ```
 
 ## examples
