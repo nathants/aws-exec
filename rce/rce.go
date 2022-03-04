@@ -37,10 +37,12 @@ type ExecPostResponse struct {
 	Uid string `json:"uid"`
 }
 
+// no tags because of mapstructure
 type ExecAsyncEvent struct {
-	EventType string   `json:"event_type"`
-	Uid       string   `json:"uid"`
-	Argv      []string `json:"argv"`
+	EventType string
+	AuthName  string
+	Uid       string
+	Argv      []string
 }
 
 type RecordKey struct {

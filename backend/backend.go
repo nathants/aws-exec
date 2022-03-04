@@ -55,10 +55,12 @@ import (
 	uuid "github.com/satori/go.uuid"
 )
 
-var corsHeaders = map[string]string{
-	"Access-Control-Allow-Origin":  "*",
-	"Access-Control-Allow-Methods": "POST, GET, OPTIONS, PUT, DELETE",
-	"Access-Control-Allow-Headers": "auth, content-type",
+func corsHeaders() map[string]string {
+	return map[string]string{
+		"Access-Control-Allow-Origin":  "*",
+		"Access-Control-Allow-Methods": "POST, GET, OPTIONS, PUT, DELETE",
+		"Access-Control-Allow-Headers": "auth, content-type",
+	}
 }
 
 func index() events.APIGatewayProxyResponse {
@@ -128,19 +130,12 @@ func notfound() events.APIGatewayProxyResponse {
 	}
 }
 
-func ok() events.APIGatewayProxyResponse {
-	return events.APIGatewayProxyResponse{
-		Body:       "ok",
-		StatusCode: 200,
-	}
-}
-
-func checkAuth(ctx context.Context, auth string) bool {
+func checkAuth(ctx context.Context, auth string) (string, bool) {
 	key, err := dynamodbattribute.MarshalMap(rce.RecordKey{
 		ID: fmt.Sprintf("auth.%s", rce.Blake2b32(auth)),
 	})
 	if err != nil {
-		return false
+		return "", false
 	}
 	table := os.Getenv("PROJECT_NAME")
 	out, err := lib.DynamoDBClient().GetItemWithContext(ctx, &dynamodb.GetItemInput{
@@ -149,28 +144,30 @@ func checkAuth(ctx context.Context, auth string) bool {
 		Key:            key,
 	})
 	if err != nil {
-		return false
+		return "", false
 	}
 	val := rce.Record{}
 	err = dynamodbattribute.UnmarshalMap(out.Item, &val)
 	if err != nil {
-		return false
+		return "", false
 	}
 	if val.Value == "" {
-		return false
+		return "", false
 	}
-	lib.Logger.Println("auth:", val.Value)
-	return true
+	return val.Value, true
 }
 
-func httpExecGet(ctx context.Context, event *events.APIGatewayProxyRequest, res chan<- events.APIGatewayProxyResponse) {
+func httpExecGet(ctx context.Context, event *events.APIGatewayProxyRequest, res chan<- events.APIGatewayProxyResponse, authName string) {
 	bucket := os.Getenv("PROJECT_BUCKET")
 	getRequest := rce.ExecGetRequest{
 		Uid:       event.QueryStringParameters["uid"],
 		Increment: aws.Int(atoi(event.QueryStringParameters["increment"])),
 	}
+	headers := corsHeaders()
+	headers["auth-name"] = authName
+	headers["uid"] = getRequest.Uid
 	// check for log N
-	logKey := fmt.Sprintf("jobs/%s/logs.%05d", getRequest.Uid, *getRequest.Increment)
+	logKey := fmt.Sprintf("jobs/%s/%s/logs.%05d", authName, getRequest.Uid, *getRequest.Increment)
 	_, err := lib.S3Client().HeadObjectWithContext(ctx, &s3.HeadObjectInput{
 		Bucket: aws.String(bucket),
 		Key:    aws.String(logKey),
@@ -194,12 +191,12 @@ func httpExecGet(ctx context.Context, event *events.APIGatewayProxyRequest, res 
 		res <- events.APIGatewayProxyResponse{
 			StatusCode: 200,
 			Body:       string(respData),
-			Headers:    corsHeaders,
+			Headers:    headers,
 		}
 		return
 	}
 	// on log N miss, check for exit code
-	exitKey := fmt.Sprintf("jobs/%s/exit", getRequest.Uid)
+	exitKey := fmt.Sprintf("jobs/%s/%s/exit", authName, getRequest.Uid)
 	_, err = lib.S3Client().HeadObjectWithContext(ctx, &s3.HeadObjectInput{
 		Bucket: aws.String(bucket),
 		Key:    aws.String(exitKey),
@@ -230,7 +227,7 @@ func httpExecGet(ctx context.Context, event *events.APIGatewayProxyRequest, res 
 			res <- events.APIGatewayProxyResponse{
 				StatusCode: 200,
 				Body:       string(respData),
-				Headers:    corsHeaders,
+				Headers:    headers,
 			}
 			return
 		}
@@ -257,7 +254,7 @@ func httpExecGet(ctx context.Context, event *events.APIGatewayProxyRequest, res 
 		res <- events.APIGatewayProxyResponse{
 			StatusCode: 200,
 			Body:       string(respData),
-			Headers:    corsHeaders,
+			Headers:    headers,
 		}
 		return
 	}
@@ -270,11 +267,11 @@ func httpExecGet(ctx context.Context, event *events.APIGatewayProxyRequest, res 
 	res <- events.APIGatewayProxyResponse{
 		StatusCode: 409,
 		Body:       string(respData),
-		Headers:    corsHeaders,
+		Headers:    headers,
 	}
 }
 
-func httpExecPost(ctx context.Context, event *events.APIGatewayProxyRequest, res chan<- events.APIGatewayProxyResponse) {
+func httpExecPost(ctx context.Context, event *events.APIGatewayProxyRequest, res chan<- events.APIGatewayProxyResponse, authName string) {
 	postReqest := rce.ExecPostRequest{}
 	if event.IsBase64Encoded {
 		data, err := base64.StdEncoding.DecodeString(event.Body)
@@ -291,11 +288,15 @@ func httpExecPost(ctx context.Context, event *events.APIGatewayProxyRequest, res
 	data, err := json.Marshal(rce.ExecAsyncEvent{
 		EventType: rce.EventExec,
 		Uid:       uid,
+		AuthName:  authName,
 		Argv:      postReqest.Argv,
 	})
 	if err != nil {
 		panic(err)
 	}
+	headers := corsHeaders()
+	headers["auth-name"] = authName
+	headers["uid"] = uid
 	out, err := lib.LambdaClient().InvokeWithContext(ctx, &sdkLambda.InvokeInput{
 		FunctionName:   aws.String(os.Getenv("AWS_LAMBDA_FUNCTION_NAME")),
 		InvocationType: aws.String(sdkLambda.InvocationTypeEvent),
@@ -317,7 +318,7 @@ func httpExecPost(ctx context.Context, event *events.APIGatewayProxyRequest, res
 	res <- events.APIGatewayProxyResponse{
 		StatusCode: 200,
 		Body:       string(data),
-		Headers:    corsHeaders,
+		Headers:    headers,
 	}
 }
 
@@ -331,11 +332,12 @@ func handleApiEvent(ctx context.Context, event *events.APIGatewayProxyRequest, r
 		if event.HTTPMethod == http.MethodOptions {
 			res <- events.APIGatewayProxyResponse{
 				StatusCode: 200,
-				Headers:    corsHeaders,
+				Headers:    corsHeaders(),
 			}
 			return
 		}
-		if !checkAuth(ctx, event.Headers["auth"]) {
+		authName, authOk := checkAuth(ctx, event.Headers["auth"])
+		if !authOk {
 			res <- unauthorized("bad auth")
 			return
 		}
@@ -343,10 +345,10 @@ func handleApiEvent(ctx context.Context, event *events.APIGatewayProxyRequest, r
 		case "/api/exec":
 			switch event.HTTPMethod {
 			case http.MethodGet:
-				httpExecGet(ctx, event, res)
+				httpExecGet(ctx, event, res, authName)
 				return
 			case http.MethodPost:
-				httpExecPost(ctx, event, res)
+				httpExecPost(ctx, event, res, authName)
 				return
 			default:
 			}
@@ -384,7 +386,7 @@ func logRecover(r interface{}, res chan<- events.APIGatewayProxyResponse) {
 	}
 }
 
-func handleAsyncEvent(ctx context.Context, event *rce.ExecAsyncEvent) {
+func handleAsyncEvent(ctx context.Context, event *rce.ExecAsyncEvent, res chan<- events.APIGatewayProxyResponse) {
 	bucket := os.Getenv("PROJECT_BUCKET")
 	ctx, cancel := context.WithTimeout(ctx, 14*time.Minute)
 	defer cancel()
@@ -425,7 +427,7 @@ func handleAsyncEvent(ctx context.Context, event *rce.ExecAsyncEvent) {
 			if val == "" {
 				return
 			}
-			key := fmt.Sprintf("jobs/%s/logs.%05d", event.Uid, increment)
+			key := fmt.Sprintf("jobs/%s/%s/logs.%05d", event.AuthName, event.Uid, increment)
 			err = lib.Retry(ctx, func() error {
 				_, err := lib.S3Client().PutObject(&s3.PutObjectInput{
 					Bucket: aws.String(bucket),
@@ -470,7 +472,7 @@ func handleAsyncEvent(ctx context.Context, event *rce.ExecAsyncEvent) {
 			exitCode = 1
 		}
 	}
-	key := fmt.Sprintf("jobs/%s/exit", event.Uid)
+	key := fmt.Sprintf("jobs/%s/%s/exit", event.AuthName, event.Uid)
 	err = lib.Retry(ctx, func() error {
 		_, err := lib.S3Client().PutObject(&s3.PutObjectInput{
 			Bucket: aws.String(bucket),
@@ -482,6 +484,14 @@ func handleAsyncEvent(ctx context.Context, event *rce.ExecAsyncEvent) {
 	if err != nil {
 		panic(err)
 	}
+	res <- events.APIGatewayProxyResponse{
+		Body:       "ok",
+		StatusCode: 200,
+		Headers: map[string]string{
+			"auth-name": event.AuthName,
+			"uid":       event.Uid,
+		},
+	}
 }
 
 func handle(ctx context.Context, event map[string]interface{}, res chan<- events.APIGatewayProxyResponse) {
@@ -490,14 +500,13 @@ func handle(ctx context.Context, event map[string]interface{}, res chan<- events
 			logRecover(r, res)
 		}
 	}()
-	if event["event_type"] == rce.EventExec {
+	if event["EventType"] == rce.EventExec {
 		asyncEvent := &rce.ExecAsyncEvent{}
 		err := mapstructure.Decode(event, asyncEvent)
 		if err != nil {
 			panic(err)
 		}
-		handleAsyncEvent(ctx, asyncEvent)
-		res <- ok()
+		handleAsyncEvent(ctx, asyncEvent, res)
 		return
 	}
 	_, ok := event["path"]
@@ -513,6 +522,10 @@ func handle(ctx context.Context, event map[string]interface{}, res chan<- events
 	handleApiEvent(ctx, apiEvent, res)
 }
 
+func timestamp() string {
+	return time.Now().UTC().Format(time.RFC3339)
+}
+
 func handleRequest(ctx context.Context, event map[string]interface{}) (events.APIGatewayProxyResponse, error) {
 	setupLogging(ctx)
 	defer lib.Logger.Flush()
@@ -521,11 +534,33 @@ func handleRequest(ctx context.Context, event map[string]interface{}) (events.AP
 	go handle(ctx, event, res)
 	r := <-res
 	path, ok := event["path"]
-	ts := time.Now().UTC().Format(time.RFC3339)
 	if ok {
-		lib.Logger.Println(r.StatusCode, path, time.Since(start), ts)
+		uid := r.Headers["uid"]
+		if uid == "" {
+			uid = "-"
+		}
+		authName := r.Headers["auth-name"]
+		if authName == "" {
+			authName = "-"
+		}
+		lib.Logger.Println(r.StatusCode, path, authName, uid, time.Since(start), timestamp())
 	} else {
-		lib.Logger.Println(fmt.Sprintf("%#v", event), time.Since(start), ts)
+		uid := event["Uid"]
+		if uid == "" {
+			uid = "-"
+		}
+		authName := event["AuthName"]
+		if authName == "" {
+			authName = "-"
+		}
+		eventType := event["EventType"]
+		if eventType == "" {
+			eventType = event["detail-type"]
+		}
+		if eventType == "" {
+			eventType = "-"
+		}
+		lib.Logger.Println("async-event", eventType, authName, uid, time.Since(start), timestamp())
 	}
 	return r, nil
 }
