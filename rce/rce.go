@@ -23,7 +23,7 @@ type ExecGetRequest struct {
 }
 
 type ExecGetResponse struct {
-	HttpCode  int
+	HttpCode  int    `json:"http_code"`
 	ExitCode  *int   `json:"exit_code"`
 	Increment *int   `json:"increment"`
 	LogUrl    string `json:"log"`
