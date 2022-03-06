@@ -545,20 +545,22 @@ func handleRequest(ctx context.Context, event map[string]interface{}) (events.AP
 		}
 		lib.Logger.Println(r.StatusCode, path, authName, uid, time.Since(start), timestamp())
 	} else {
-		uid := event["Uid"]
-		if uid == "" {
+		uid, ok := event["Uid"].(string)
+		if !ok {
 			uid = "-"
 		}
-		authName := event["AuthName"]
-		if authName == "" {
+		authName, ok := event["AuthName"].(string)
+		if !ok {
 			authName = "-"
 		}
-		eventType := event["EventType"]
-		if eventType == "" {
-			eventType = event["detail-type"]
-		}
-		if eventType == "" {
-			eventType = "-"
+		eventType, ok := event["EventType"].(string) // our event
+		if !ok {
+			_, ok = event["detail-type"].(string) // aws scheduled event
+			if ok {
+				eventType = "scheduled-event"
+			} else {
+				eventType = "-"
+			}
 		}
 		lib.Logger.Println("async-event", eventType, authName, uid, time.Since(start), timestamp())
 	}
