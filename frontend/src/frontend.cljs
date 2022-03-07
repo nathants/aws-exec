@@ -153,7 +153,7 @@
                                    (swap! state assoc :loading false)
                                    (throw "bad auth"))
         (= 200 (:status resp)) (:uid (:body resp))
-        (< i 7) (do (<! (a/timeout (* i 10)))
+        (< i 7) (do (<! (a/timeout (* i 100)))
                     (recur (inc i)))
         :else (do (swap! state assoc :loading false)
                   (throw "failed after several tries"))))))
@@ -171,7 +171,7 @@
       (cond
         (= 200 (:status resp)) resp
         (= 409 (:status resp)) resp
-        :else (do (<! (a/timeout (* i 10)))
+        :else (do (<! (a/timeout (* i 100)))
                   (recur (inc i)))))))
 
 (defn s3-log-get [log-url]
@@ -182,7 +182,7 @@
         (throw "failed after several tries"))
       (cond
         (= 200 (:status resp)) resp
-        :else (do (<! (a/timeout (* i 10)))
+        :else (do (<! (a/timeout (* i 100)))
                   (recur (inc i)))))))
 
 (def max-events 256)
@@ -209,7 +209,7 @@
                         event (:body (<! (s3-log-get log-url)))]
                     (swap! state update-in [:events] #(vec (take-last max-events (conj % event))))
                     (recur new-increment)))
-            409 (do (<! (a/timeout 50))
+            409 (do (<! (a/timeout 1000))
                     (recur increment))))))))
 
 (defn keydown-listener [e]
