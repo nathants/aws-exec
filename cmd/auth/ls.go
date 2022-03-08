@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/alexflint/go-arg"
 	"github.com/aws/aws-sdk-go/aws"
@@ -47,7 +48,9 @@ func authLs() {
 			if err != nil {
 				panic(err)
 			}
-			fmt.Println(val.ID, val.Value)
+			if strings.HasPrefix(val.ID, "auth.") {
+				fmt.Println(val.ID, val.Value)
+			}
 		}
 		if out.LastEvaluatedKey == nil {
 			break
