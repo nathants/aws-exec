@@ -299,7 +299,7 @@
      (if (:loading @state)
        [card card-style
         [linear-progress {:style {:height "13px"}}] ]
-       [text-field {:label "slim.ai rce"
+       [text-field {:label "aws-rce"
                     :id "search"
                     :autoComplete "off"
                     :spellCheck false
