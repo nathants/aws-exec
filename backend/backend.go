@@ -40,6 +40,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/aws/aws-lambda-go/events"
@@ -388,8 +389,7 @@ func logRecover(r interface{}, res chan<- events.APIGatewayProxyResponse) {
 
 func handleAsyncEvent(ctx context.Context, event *rce.ExecAsyncEvent, res chan<- events.APIGatewayProxyResponse) {
 	bucket := os.Getenv("PROJECT_BUCKET")
-	ctx, cancel := context.WithTimeout(ctx, 14*time.Minute)
-	defer cancel()
+	start := time.Now()
 	cmd := exec.CommandContext(ctx, event.Argv[0], event.Argv[1:]...)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -400,6 +400,21 @@ func handleAsyncEvent(ctx context.Context, event *rce.ExecAsyncEvent, res chan<-
 		panic(err)
 	}
 	lines := make(chan *string, 128)
+	go func() {
+		for {
+			if time.Since(start) > 14*time.Minute {
+				lines <- aws.String("timeout after 14 minutes")
+				_ = cmd.Process.Signal(syscall.SIGKILL)
+				return
+			}
+			select {
+			case <-ctx.Done():
+				return
+			default:
+				time.Sleep(1 * time.Second)
+			}
+		}
+	}()
 	for _, r := range []io.ReadCloser{stdout, stderr} {
 		r := r
 		go func() {
