@@ -459,17 +459,22 @@ func handleAsyncEvent(ctx context.Context, event *rce.ExecAsyncEvent, res chan<-
 			increment++
 			lastShipped = time.Now()
 		}
-		for line := range lines {
-			if line == nil {
-				doneCount++
-				if doneCount == 2 {
-					shipLogs()
-					logsDone <- nil
-					return
+		for {
+			select {
+			case line := <-lines:
+				if line == nil {
+					doneCount++
+					if doneCount == 2 {
+						shipLogs()
+						logsDone <- nil
+						return
+					}
+				} else {
+					toShip = append(toShip, *line)
 				}
-				continue
+			case <-time.After(1 * time.Second):
+				// check if logs need to be shipped even when no new output
 			}
-			toShip = append(toShip, *line)
 			if time.Since(lastShipped) > 1*time.Second {
 				shipLogs()
 			}
