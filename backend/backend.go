@@ -339,7 +339,7 @@ func handleApiEvent(ctx context.Context, event *events.APIGatewayProxyRequest, r
 		}
 		authName, authOk := checkAuth(ctx, event.Headers["auth"])
 		if !authOk {
-			res <- unauthorized("bad auth")
+			res <- unauthorized()
 			return
 		}
 		switch event.Path {
@@ -369,11 +369,11 @@ func atoi(x string) int {
 	return n
 }
 
-func unauthorized(body string) events.APIGatewayProxyResponse {
+func unauthorized() events.APIGatewayProxyResponse {
+	time.Sleep(1 * time.Second)
 	return events.APIGatewayProxyResponse{
 		StatusCode: 401,
 		Headers:    map[string]string{"Content-Type": ""},
-		Body:       body,
 	}
 }
 
