@@ -6,8 +6,9 @@ require (
 	github.com/alexflint/go-arg v1.4.3
 	github.com/aws/aws-lambda-go v1.28.0
 	github.com/aws/aws-sdk-go v1.43.26
+	github.com/dustin/go-humanize v1.0.0
 	github.com/mitchellh/mapstructure v1.4.3
-	github.com/nathants/cli-aws v0.0.0-20220323092456-e9d62ccc90c7
+	github.com/nathants/cli-aws v0.0.0-20220326074650-1e00049fc62a
 	github.com/satori/go.uuid v1.2.0
 	golang.org/x/crypto v0.0.0-20220321153916-2c7772ba3064
 )

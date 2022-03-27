@@ -15,9 +15,8 @@
 // allow: s3:* arn:aws:s3:::${PROJECT_BUCKET}/*
 // allow: lambda:InvokeFunction arn:aws:lambda:*:*:function:${PROJECT_NAME}
 //
-// include: ../frontend/public/js/
-// include: ../frontend/public/index.*
-// include: ../frontend/public/favicon.*
+// include: ../frontend/public/index.html.gzip
+// include: ../frontend/public/favicon.png
 //
 
 package main
@@ -27,7 +26,9 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -50,6 +51,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbattribute"
 	sdkLambda "github.com/aws/aws-sdk-go/service/lambda"
 	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/dustin/go-humanize"
 	"github.com/mitchellh/mapstructure"
 	"github.com/nathants/aws-rce/rce"
 	"github.com/nathants/cli-aws/lib"
@@ -323,7 +325,41 @@ func httpExecPost(ctx context.Context, event *events.APIGatewayProxyRequest, res
 	}
 }
 
+func fileInfo(file string) map[string]string {
+	info, err := os.Stat(file)
+	if err != nil {
+		panic(err)
+	}
+	data, err := ioutil.ReadFile(file)
+	if err != nil {
+		panic(err)
+	}
+	hash := sha256.Sum256(data)
+	return map[string]string{
+		"sha256": hex.EncodeToString(hash[:]),
+		"size":   humanize.Bytes(uint64(info.Size())),
+	}
+}
+
 func handleApiEvent(ctx context.Context, event *events.APIGatewayProxyRequest, res chan<- events.APIGatewayProxyResponse) {
+	if event.Path == "/" {
+		res <- index()
+		return
+	}
+	if event.Path == "/_version" {
+		data, err := json.Marshal(map[string]map[string]string{
+			"backend":  fileInfo("main"),
+			"frontend": fileInfo("frontend/public/index.html.gzip"),
+		})
+		if err != nil {
+			panic(err)
+		}
+		res <- events.APIGatewayProxyResponse{
+			StatusCode: 200,
+			Body:       string(data),
+		}
+		return
+	}
 	if strings.HasPrefix(event.Path, "/js/main.js") ||
 		strings.HasPrefix(event.Path, "/favicon.") {
 		res <- static(event.Path)
@@ -358,7 +394,7 @@ func handleApiEvent(ctx context.Context, event *events.APIGatewayProxyRequest, r
 		res <- notfound()
 		return
 	}
-	res <- index()
+	res <- notfound()
 }
 
 func atoi(x string) int {
@@ -563,7 +599,8 @@ func handleRequest(ctx context.Context, event map[string]interface{}) (events.AP
 		if authName == "" {
 			authName = "-"
 		}
-		lib.Logger.Println(r.StatusCode, path, authName, uid, time.Since(start), timestamp())
+		ip := event["requestContext"].(map[string]interface{})["identity"].(map[string]interface{})["sourceIp"].(string)
+		lib.Logger.Println("http", r.StatusCode, path, authName, uid, time.Since(start), ip, timestamp())
 	} else {
 		uid, ok := event["Uid"].(string)
 		if !ok {

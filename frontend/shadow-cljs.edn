@@ -10,4 +10,5 @@
  :builds {:app {:target :browser
                 :output-dir "public/js"
                 :js-options {:js-provider :shadow}
-                :modules {:main {:init-fn frontend/main}}}}}
+                :modules {:main {:init-fn frontend/main}}
+                :closure-defines {frontend/domain #shadow/env "PROJECT_DOMAIN"}}}}

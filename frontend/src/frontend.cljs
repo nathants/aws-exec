@@ -138,7 +138,11 @@
     (.click a)
     (.remove a)))
 
-(def api-url "") ;; or "https://$PROJECT_DOMAIN" when using bin/dev.sh
+(goog-define domain "") ;; defined via environment variable PROJECT_DOMAIN
+
+(def api-url (str "https://" domain))
+
+(def max-retries 7)
 
 (defn exec-api-post [cmd]
   (go-loop [i 0]
@@ -153,8 +157,8 @@
                                    (swap! state assoc :loading false)
                                    (throw "bad auth"))
         (= 200 (:status resp)) (:uid (:body resp))
-        (< i 7) (do (<! (a/timeout (* i 100)))
-                    (recur (inc i)))
+        (< i max-retries) (do (<! (a/timeout (* i 100)))
+                              (recur (inc i)))
         :else (do (swap! state assoc :loading false)
                   (throw "failed after several tries"))))))
 
@@ -165,25 +169,21 @@
                                              :increment increment}
                               :headers {"auth" (blake2b-32 (:auth @state))}
                               :with-credentials? false}))]
-      (when (= 7 i)
-        (swap! state assoc :loading false)
-        (throw "failed after several tries"))
       (cond
         (= 200 (:status resp)) resp
         (= 409 (:status resp)) resp
-        :else (do (<! (a/timeout (* i 100)))
-                  (recur (inc i)))))))
+        (< i max-retries) (do (<! (a/timeout (* i 100)))
+                              (recur (inc i)))
+        :else (throw "failed after several tries")))))
 
 (defn s3-log-get [log-url]
   (go-loop [i 0]
     (let [resp (<! (http/get log-url {:with-credentials? false}))]
-      (when (= 7 i)
-        (swap! state assoc :loading false)
-        (throw "failed after several tries"))
       (cond
         (= 200 (:status resp)) resp
-        :else (do (<! (a/timeout (* i 100)))
-                  (recur (inc i)))))))
+        (< i max-retries) (do (<! (a/timeout (* i 100)))
+                              (recur (inc i)))
+        :else (throw "failed after several tries")))))
 
 (def max-events 256)
 
