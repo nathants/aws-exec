@@ -409,7 +409,7 @@ func unauthorized() events.APIGatewayProxyResponse {
 	time.Sleep(1 * time.Second)
 	return events.APIGatewayProxyResponse{
 		StatusCode: 401,
-		Headers:    map[string]string{"Content-Type": ""},
+		Headers:    corsHeaders(),
 	}
 }
 
