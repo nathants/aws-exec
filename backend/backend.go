@@ -157,7 +157,7 @@ func checkAuth(ctx context.Context, auth string) (string, bool) {
 	if val.Value == "" {
 		return "", false
 	}
-	return val.Value, true
+	return val.Value + ":" + val.ID[5:21], true
 }
 
 func httpExecGet(ctx context.Context, event *events.APIGatewayProxyRequest, res chan<- events.APIGatewayProxyResponse, authName string) {
