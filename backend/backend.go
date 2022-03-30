@@ -10,7 +10,6 @@
 // trigger: api dns=${PROJECT_DOMAIN}
 // trigger: cloudwatch rate(5 minutes)
 //
-// policy: AWSLambdaBasicExecutionRole
 // allow: dynamodb:* arn:aws:dynamodb:*:*:table/${PROJECT_NAME}
 // allow: s3:* arn:aws:s3:::${PROJECT_BUCKET}/*
 // allow: lambda:InvokeFunction arn:aws:lambda:*:*:function:${PROJECT_NAME}
