@@ -51,10 +51,10 @@ import (
 	sdkLambda "github.com/aws/aws-sdk-go/service/lambda"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/dustin/go-humanize"
+	uuid "github.com/gofrs/uuid"
 	"github.com/mitchellh/mapstructure"
 	"github.com/nathants/aws-rce/rce"
 	"github.com/nathants/cli-aws/lib"
-	uuid "github.com/satori/go.uuid"
 )
 
 func corsHeaders() map[string]string {
@@ -286,7 +286,7 @@ func httpExecPost(ctx context.Context, event *events.APIGatewayProxyRequest, res
 	if err != nil {
 		panic(fmt.Sprint(event.Body, err))
 	}
-	uid := fmt.Sprintf("%d.%s", time.Now().Unix(), uuid.NewV4().String())
+	uid := fmt.Sprintf("%d.%s", time.Now().Unix(), uuid.Must(uuid.NewV4()).String())
 	data, err := json.Marshal(rce.ExecAsyncEvent{
 		EventType: rce.EventExec,
 		Uid:       uid,
@@ -626,7 +626,7 @@ func handleRequest(ctx context.Context, event map[string]interface{}) (events.AP
 func setupLogging(ctx context.Context) {
 	lock := sync.RWMutex{}
 	var lines []string
-	uid := uuid.NewV4().String()
+	uid := uuid.Must(uuid.NewV4()).String()
 	count := 0
 	lib.Logger = &lib.LoggerStruct{
 		Print: func(args ...interface{}) {
