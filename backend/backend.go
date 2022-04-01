@@ -36,6 +36,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime/debug"
 	"strconv"
 	"strings"
@@ -324,19 +325,39 @@ func httpExecPost(ctx context.Context, event *events.APIGatewayProxyRequest, res
 	}
 }
 
-func fileInfo(file string) map[string]string {
-	info, err := os.Stat(file)
+func httpVersionGet(ctx context.Context, event *events.APIGatewayProxyRequest, res chan<- events.APIGatewayProxyResponse) {
+	val := map[string]string{}
+	err := filepath.Walk(".", func(file string, _ os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		info, err := os.Stat(file)
+		if err != nil {
+			panic(err)
+		}
+		if info.IsDir() {
+			return nil
+		}
+		data, err := ioutil.ReadFile(file)
+		if err != nil {
+			panic(err)
+		}
+		hash := sha256.Sum256(data)
+		hashHex := hex.EncodeToString(hash[:])
+		size := humanize.Bytes(uint64(info.Size()))
+		val[file] = fmt.Sprintf("%s %s", hashHex, size)
+		return nil
+	})
 	if err != nil {
 		panic(err)
 	}
-	data, err := ioutil.ReadFile(file)
+	data, err := json.Marshal(val)
 	if err != nil {
 		panic(err)
 	}
-	hash := sha256.Sum256(data)
-	return map[string]string{
-		"sha256": hex.EncodeToString(hash[:]),
-		"size":   humanize.Bytes(uint64(info.Size())),
+	res <- events.APIGatewayProxyResponse{
+		StatusCode: 200,
+		Body:       string(data),
 	}
 }
 
@@ -346,17 +367,7 @@ func handleApiEvent(ctx context.Context, event *events.APIGatewayProxyRequest, r
 		return
 	}
 	if event.Path == "/_version" {
-		data, err := json.Marshal(map[string]map[string]string{
-			"backend":  fileInfo("main"),
-			"frontend": fileInfo("frontend/public/index.html.gzip"),
-		})
-		if err != nil {
-			panic(err)
-		}
-		res <- events.APIGatewayProxyResponse{
-			StatusCode: 200,
-			Body:       string(data),
-		}
+		httpVersionGet(ctx, event, res)
 		return
 	}
 	if strings.HasPrefix(event.Path, "/js/main.js") ||
