@@ -3,8 +3,6 @@ set -eou pipefail
 
 source env.sh
 
-(ps -ef | grep shadow-cljs | awk '{print $2}' | xargs kill) &>/dev/null || true
-
 (
     cd frontend
     npm ci
