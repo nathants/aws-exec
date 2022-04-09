@@ -3,7 +3,6 @@
   "version": "0.0.1",
   "private": true,
   "devDependencies": {
-    "http-server": "^14",
     "shadow-cljs": "2.18.0"
   },
   "dependencies": {
