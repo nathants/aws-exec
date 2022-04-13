@@ -479,10 +479,43 @@ func handleAsyncEvent(ctx context.Context, event *rce.ExecAsyncEvent, res chan<-
 	}
 	logsDone := make(chan error)
 	go func() {
+		logToDisk := true
+		maxLogBytes := int64(1024 * 1024 * 448)
+		logShipInterval := 1 * time.Second
 		increment := 0
 		doneCount := 0
 		toShip := []string{}
 		lastShipped := time.Now()
+		logFilePath := "/tmp/log.txt"
+		_ = os.Remove(logFilePath)
+		logFile, err := os.Create(logFilePath)
+		if err != nil {
+			lib.Logger.Println("error:", err)
+			return
+		}
+		shipLogsOnDisk := func() {
+			key := fmt.Sprintf("jobs/%s/%s/log.txt", event.AuthName, event.Uid)
+			err = lib.Retry(ctx, func() error {
+				err := logFile.Close()
+				if err != nil {
+					panic(err)
+				}
+				r, err := os.Open(logFilePath)
+				if err != nil {
+					panic(err)
+				}
+				_, err = lib.S3Client().PutObject(&s3.PutObjectInput{
+					Bucket: aws.String(bucket),
+					Key:    aws.String(key),
+					Body:   r,
+				})
+				return err
+			})
+			if err != nil {
+				lib.Logger.Println("error:", err)
+				return
+			}
+		}
 		shipLogs := func() {
 			val := strings.Join(toShip, "\n")
 			val = strings.Trim(val, " \n")
@@ -502,6 +535,27 @@ func handleAsyncEvent(ctx context.Context, event *rce.ExecAsyncEvent, res chan<-
 				lib.Logger.Println("error:", err)
 				return
 			}
+			fi, err := logFile.Stat()
+			if err != nil {
+				lib.Logger.Println("error:", err)
+				return
+			}
+			if fi.Size() > maxLogBytes {
+				if logToDisk {
+					_, err = logFile.WriteString("[log truncated]\n")
+					if err != nil {
+						lib.Logger.Println("error:", err)
+						return
+					}
+					logToDisk = false
+				}
+			} else {
+				_, err = logFile.WriteString(val + "\n")
+				if err != nil {
+					lib.Logger.Println("error:", err)
+					return
+				}
+			}
 			toShip = nil
 			increment++
 			lastShipped = time.Now()
@@ -513,16 +567,17 @@ func handleAsyncEvent(ctx context.Context, event *rce.ExecAsyncEvent, res chan<-
 					doneCount++
 					if doneCount == 2 {
 						shipLogs()
+						shipLogsOnDisk()
 						logsDone <- nil
 						return
 					}
 				} else {
 					toShip = append(toShip, *line)
 				}
-			case <-time.After(1 * time.Second):
+			case <-time.After(logShipInterval):
 				// check if logs need to be shipped even when no new output
 			}
-			if time.Since(lastShipped) > 1*time.Second {
+			if time.Since(lastShipped) > logShipInterval {
 				shipLogs()
 			}
 		}
