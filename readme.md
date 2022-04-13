@@ -40,7 +40,8 @@ docker run -it --rm \
 
 ```bash
 go install github.com/nathants/aws-rce@latest
-source env.sh
+export AUTH=$AUTH
+export PROJECT_DOMAIN=$DOMAIN
 ~/go/bin/aws-rce exec whoami
 ```
 
