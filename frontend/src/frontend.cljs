@@ -1,7 +1,6 @@
 (ns frontend
   (:require-macros [cljs.core.async.macros :refer [go go-loop]])
-  (:require ["libsodium-wrappers" :as sodium]
-            ["localforage" :as localforage]
+  (:require ["localforage" :as localforage]
             [lambdaisland.ansi :as ansi]
             [cljs-http.client :as http]
             [cljs.core.async :refer [<! >! chan put! close! timeout] :as a]
@@ -34,20 +33,6 @@
 
 (defn prevent-default [^js/Event e]
   (.preventDefault e))
-
-(defn to-uint8-array [string]
-  (.encode (js/TextEncoder.) string))
-
-(defn to-hex [uint8-array]
-  (.to_hex sodium uint8-array))
-
-(def sodium-ready
-  (let [c (chan)]
-    (.then (.-ready sodium) #(close! c))
-    c))
-
-(defn blake2b-32 [string]
-  (to-hex (.crypto_generichash sodium 32 (to-uint8-array string))))
 
 (defn lf-set-backend []
   (let [c (chan)]
@@ -147,7 +132,7 @@
 (defn exec-api-post [cmd]
   (go-loop [i 0]
     (let [resp (<! (http/post (str api-url "/api/exec")
-                              {:headers {"auth" (blake2b-32 (:auth @state))}
+                              {:headers {"auth" (:auth @state)}
                                :json-params {:argv ["bash" "-c" cmd]}
                                :with-credentials? false}))]
       (cond
@@ -167,7 +152,7 @@
     (let [resp (<! (http/get (str api-url "/api/exec")
                              {:query-params {:uid uid
                                              :increment increment}
-                              :headers {"auth" (blake2b-32 (:auth @state))}
+                              :headers {"auth" (:auth @state)}
                               :with-credentials? false}))]
       (cond
         (= 200 (:status resp)) resp
@@ -353,5 +338,4 @@
       (<! (lf-set-backend))
       (when-let [auth (<! (lf-get "auth"))]
         (swap! state assoc :auth auth))
-      (<! sodium-ready)
       (reagent-render)))

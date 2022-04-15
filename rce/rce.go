@@ -58,8 +58,8 @@ type Record struct {
 	RecordData
 }
 
-func Blake2b32(password string) string {
-	val := blake2b.Sum256([]byte(password))
+func Blake2b32(x string) string {
+	val := blake2b.Sum256([]byte(x))
 	return hex.EncodeToString(val[:])
 }
 
@@ -83,7 +83,7 @@ func Exec(ctx context.Context, url, auth string, argv []string, logDataCallback 
 			return err
 		}
 		req, err := http.NewRequest(http.MethodPost, url+"/api/exec", bytes.NewReader(data))
-		req.Header.Set("auth", Blake2b32(auth))
+		req.Header.Set("auth", auth)
 		if err != nil {
 			return err
 		}
@@ -127,7 +127,7 @@ func Exec(ctx context.Context, url, auth string, argv []string, logDataCallback 
 			if err != nil {
 				return err
 			}
-			req.Header.Set("auth", Blake2b32(auth))
+			req.Header.Set("auth", auth)
 			out, err := client.Do(req)
 			if err != nil {
 				return err

@@ -34,7 +34,7 @@ func authNew() {
 	key := rce.RandKey()
 	item, err := dynamodbattribute.MarshalMap(rce.Record{
 		RecordKey: rce.RecordKey{
-			ID: fmt.Sprintf("auth.%s", rce.Blake2b32(rce.Blake2b32(key))),
+			ID: fmt.Sprintf("auth.%s", rce.Blake2b32(key)),
 		},
 		RecordData: rce.RecordData{
 			Value: args.Name,
