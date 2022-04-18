@@ -8,7 +8,6 @@ require (
 	github.com/aws/aws-sdk-go v1.43.28
 	github.com/dustin/go-humanize v1.0.0
 	github.com/gofrs/uuid v4.2.0+incompatible
-	github.com/mitchellh/mapstructure v1.4.3
 	github.com/nathants/cli-aws v0.0.0-20220331075614-7e62d2648cf1
 	golang.org/x/crypto v0.0.0-20220331220935-ae2d96664a29
 )

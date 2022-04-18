@@ -23,26 +23,25 @@ type ExecGetRequest struct {
 }
 
 type ExecGetResponse struct {
-	HttpCode  int    `json:"http_code"`
-	ExitCode  *int   `json:"exit_code"`
+	HttpCode  int    `json:"http-code"`
+	ExitCode  *int   `json:"exit-code"`
 	Increment *int   `json:"increment"`
 	LogUrl    string `json:"log"`
 }
 
 type ExecPostRequest struct {
-	Argv []string
+	Argv []string `json:"argv"`
 }
 
 type ExecPostResponse struct {
 	Uid string `json:"uid"`
 }
 
-// no tags because of mapstructure
 type ExecAsyncEvent struct {
-	EventType string
-	AuthName  string
-	Uid       string
-	Argv      []string
+	EventType string   `json:"event-type"`
+	AuthName  string   `json:"auth-name"`
+	Uid       string   `json:"uid"`
+	Argv      []string `json:"argv"`
 }
 
 type RecordKey struct {

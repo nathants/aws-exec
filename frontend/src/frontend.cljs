@@ -185,7 +185,7 @@
       (loop [increment 0]
         (let [resp (<! (exec-api-get uid increment))]
           (condp = (:status resp)
-            200 (if-let [exit-code (:exit_code (:body resp))]
+            200 (if-let [exit-code (:exit-code (:body resp))]
                   (swap! state #(-> %
                                   (update-in [:events] conj (str "exit code: " exit-code))
                                   (assoc :loading false)))
@@ -266,7 +266,6 @@
           params (flatten params)
           params (apply hash-map params)]
       (when-let [cmd (get params "cmd")]
-        (log "hello" cmd)
         (swap! state assoc :search-text (js/decodeURIComponent cmd))
         (submit-command))
       nil)))
@@ -300,7 +299,7 @@
                             :margin "1%"}}])]
     [:form
      [card card-style
-      [text-field {:label "paste auth token here"
+      [text-field {:label "paste auth here"
                    :value (:auth @state)
                    :type :password
                    :on-change #(swap! state assoc :auth (target-value %))
