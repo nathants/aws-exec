@@ -31,7 +31,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"mime"
 	"net/http"
 	"os"
@@ -69,11 +68,11 @@ func index() events.APIGatewayProxyResponse {
 	headers := map[string]string{
 		"Content-Type": "text/html; charset=UTF-8",
 	}
-	indexBytes, err := ioutil.ReadFile("frontend/public/index.html.gzip")
+	indexBytes, err := os.ReadFile("frontend/public/index.html.gzip")
 	if err == nil {
 		headers["Content-Encoding"] = "gzip"
 	} else {
-		indexBytes, err = ioutil.ReadFile("frontend/public/index.html")
+		indexBytes, err = os.ReadFile("frontend/public/index.html")
 		if err != nil {
 			panic(err)
 		}
@@ -87,7 +86,7 @@ func index() events.APIGatewayProxyResponse {
 }
 
 func static(path string) events.APIGatewayProxyResponse {
-	data, err := ioutil.ReadFile("frontend/public" + path)
+	data, err := os.ReadFile("frontend/public" + path)
 	if err != nil {
 		return events.APIGatewayProxyResponse{
 			StatusCode: 404,
@@ -162,66 +161,49 @@ func checkAuth(ctx context.Context, auth string) (string, bool) {
 func httpExecGet(ctx context.Context, event *events.APIGatewayProxyRequest, res chan<- events.APIGatewayProxyResponse, authName string) {
 	bucket := os.Getenv("PROJECT_BUCKET")
 	getRequest := rce.ExecGetRequest{
-		Uid:       event.QueryStringParameters["uid"],
-		Increment: aws.Int(atoi(event.QueryStringParameters["increment"])),
+		Uid:        event.QueryStringParameters["uid"],
+		RangeStart: atoi(event.QueryStringParameters["range-start"]),
 	}
 	headers := corsHeaders()
 	headers["auth-name"] = authName
 	headers["uid"] = getRequest.Uid
-	// check for log N
-	logKey := fmt.Sprintf("jobs/%s/%s/logs.%05d", authName, getRequest.Uid, *getRequest.Increment)
-	_, err := lib.S3Client().HeadObjectWithContext(ctx, &s3.HeadObjectInput{
-		Bucket: aws.String(bucket),
-		Key:    aws.String(logKey),
-	})
-	if err == nil {
-		req, _ := lib.S3Client().GetObjectRequest(&s3.GetObjectInput{
-			Bucket: aws.String(bucket),
-			Key:    aws.String(logKey),
-		})
-		url, err := req.Presign(60 * time.Second)
-		if err != nil {
-			panic(err)
-		}
-		respData, err := json.Marshal(rce.ExecGetResponse{
-			Increment: aws.Int(*getRequest.Increment + 1),
-			LogUrl:    url,
-		})
-		if err != nil {
-			panic(err)
-		}
-		res <- events.APIGatewayProxyResponse{
-			StatusCode: 200,
-			Body:       string(respData),
-			Headers:    headers,
-		}
-		return
-	}
-	// on log N miss, check for exit code
+	sizeKey := fmt.Sprintf("jobs/%s/%s/size", authName, getRequest.Uid)
 	exitKey := fmt.Sprintf("jobs/%s/%s/exit", authName, getRequest.Uid)
-	_, err = lib.S3Client().HeadObjectWithContext(ctx, &s3.HeadObjectInput{
+	logKey := fmt.Sprintf("jobs/%s/%s/log.txt", authName, getRequest.Uid)
+	// once size is known and client has read size bytes, return exit
+	outSize, err := lib.S3Client().GetObjectWithContext(ctx, &s3.GetObjectInput{
 		Bucket: aws.String(bucket),
-		Key:    aws.String(exitKey),
+		Key:    aws.String(sizeKey),
 	})
 	if err == nil {
-
-		// on exit hit, check once more for logs since log N and exit could both be written after inital miss for log N
-		_, err := lib.S3Client().HeadObjectWithContext(ctx, &s3.HeadObjectInput{
-			Bucket: aws.String(bucket),
-			Key:    aws.String(logKey),
-		})
-		if err == nil {
-			req, _ := lib.S3Client().GetObjectRequest(&s3.GetObjectInput{
+		sizeData, err := io.ReadAll(outSize.Body)
+		if err != nil {
+			panic(err)
+		}
+		err = outSize.Body.Close()
+		if err != nil {
+			panic(err)
+		}
+		size := atoi(string(sizeData))
+		if getRequest.RangeStart == size {
+			outExit, err := lib.S3Client().GetObjectWithContext(ctx, &s3.GetObjectInput{
 				Bucket: aws.String(bucket),
-				Key:    aws.String(logKey),
+				Key:    aws.String(exitKey),
 			})
-			url, err := req.Presign(60 * time.Second)
 			if err != nil {
 				panic(err)
 			}
+			exitData, err := io.ReadAll(outExit.Body)
+			if err != nil {
+				panic(err)
+			}
+			err = outExit.Body.Close()
+			if err != nil {
+				panic(err)
+			}
+			exit := atoi(string(exitData))
 			respData, err := json.Marshal(rce.ExecGetResponse{
-				Increment: aws.Int(*getRequest.Increment + 1),
-				LogUrl:    url,
+				Exit: aws.Int(exit),
 			})
 			if err != nil {
 				panic(err)
@@ -233,41 +215,26 @@ func httpExecGet(ctx context.Context, event *events.APIGatewayProxyRequest, res 
 			}
 			return
 		}
-
-		// on second log miss, return exit
-		out, err := lib.S3Client().GetObjectWithContext(ctx, &s3.GetObjectInput{
-			Bucket: aws.String(bucket),
-			Key:    aws.String(exitKey),
-		})
-		if err != nil {
-			panic(err)
-		}
-		defer func() { _ = out.Body.Close() }()
-		outData, err := ioutil.ReadAll(out.Body)
-		if err != nil {
-			panic(err)
-		}
-		respData, err := json.Marshal(rce.ExecGetResponse{
-			ExitCode: aws.Int(atoi(string(outData))),
-		})
-		if err != nil {
-			panic(err)
-		}
-		res <- events.APIGatewayProxyResponse{
-			StatusCode: 200,
-			Body:       string(respData),
-			Headers:    headers,
-		}
-		return
 	}
-
-	// no data, wait
-	respData, err := json.Marshal(rce.ExecGetResponse{})
+	// otherwize return presigned s3 url for range-start
+	rangeHeader := fmt.Sprintf("bytes=%d-", getRequest.RangeStart)
+	req, _ := lib.S3Client().GetObjectRequest(&s3.GetObjectInput{
+		Bucket: aws.String(bucket),
+		Key:    aws.String(logKey),
+		Range:  aws.String(rangeHeader),
+	})
+	url, err := req.Presign(60 * time.Second)
+	if err != nil {
+		panic(err)
+	}
+	respData, err := json.Marshal(rce.ExecGetResponse{
+		Url: url,
+	})
 	if err != nil {
 		panic(err)
 	}
 	res <- events.APIGatewayProxyResponse{
-		StatusCode: 409,
+		StatusCode: 200,
 		Body:       string(respData),
 		Headers:    headers,
 	}
@@ -337,7 +304,7 @@ func httpVersionGet(_ context.Context, _ *events.APIGatewayProxyRequest, res cha
 		if info.IsDir() {
 			return nil
 		}
-		data, err := ioutil.ReadFile(file)
+		data, err := os.ReadFile(file)
 		if err != nil {
 			panic(err)
 		}
@@ -477,87 +444,61 @@ func handleAsyncEvent(ctx context.Context, event *rce.ExecAsyncEvent, res chan<-
 		}()
 	}
 	logsDone := make(chan error)
+	logFileSize := 0
 	go func() {
 		logToDisk := true
-		maxLogBytes := int64(1024 * 1024 * 448)
-		logShipInterval := 1 * time.Second
-		increment := 0
 		doneCount := 0
-		toShip := []string{}
-		lastShipped := time.Now()
+		lastShippedTime := time.Now()
+		lastShippedSize := 0
+		logKey := fmt.Sprintf("jobs/%s/%s/log.txt", event.AuthName, event.Uid)
+		logLock := &sync.RWMutex{}
 		logFilePath := "/tmp/log.txt"
 		_ = os.Remove(logFilePath)
 		logFile, err := os.Create(logFilePath)
 		if err != nil {
-			lib.Logger.Println("error:", err)
-			return
+			panic(err)
 		}
-		shipLogsOnDisk := func() {
-			key := fmt.Sprintf("jobs/%s/%s/log.txt", event.AuthName, event.Uid)
+		logFileWriter := bufio.NewWriter(logFile)
+		shipLogs := func() {
 			err = lib.Retry(ctx, func() error {
-				err := logFile.Close()
+				logLock.Lock()
+				err := logFileWriter.Flush()
 				if err != nil {
 					panic(err)
 				}
+				err = logFile.Sync()
+				if err != nil {
+					panic(err)
+				}
+				logLock.Unlock()
 				r, err := os.Open(logFilePath)
 				if err != nil {
 					panic(err)
 				}
-				_, err = lib.S3Client().PutObject(&s3.PutObjectInput{
+				fi, err := r.Stat()
+				if err != nil {
+					panic(err)
+				}
+				size := int(fi.Size())
+				if lastShippedSize == size {
+					return nil
+				}
+				lastShippedSize = size
+				_, s3err := lib.S3Client().PutObject(&s3.PutObjectInput{
 					Bucket: aws.String(bucket),
-					Key:    aws.String(key),
+					Key:    aws.String(logKey),
 					Body:   r,
 				})
-				return err
-			})
-			if err != nil {
-				lib.Logger.Println("error:", err)
-				return
-			}
-		}
-		shipLogs := func() {
-			val := strings.Join(toShip, "\n")
-			val = strings.Trim(val, " \n")
-			if val == "" {
-				return
-			}
-			key := fmt.Sprintf("jobs/%s/%s/logs.%05d", event.AuthName, event.Uid, increment)
-			err = lib.Retry(ctx, func() error {
-				_, err := lib.S3Client().PutObject(&s3.PutObjectInput{
-					Bucket: aws.String(bucket),
-					Key:    aws.String(key),
-					Body:   bytes.NewReader([]byte(val)),
-				})
-				return err
-			})
-			if err != nil {
-				lib.Logger.Println("error:", err)
-				return
-			}
-			fi, err := logFile.Stat()
-			if err != nil {
-				lib.Logger.Println("error:", err)
-				return
-			}
-			if fi.Size() > maxLogBytes {
-				if logToDisk {
-					_, err = logFile.WriteString("[log truncated]\n")
-					if err != nil {
-						lib.Logger.Println("error:", err)
-						return
-					}
-					logToDisk = false
-				}
-			} else {
-				_, err = logFile.WriteString(val + "\n")
+				err = r.Close()
 				if err != nil {
-					lib.Logger.Println("error:", err)
-					return
+					panic(err)
 				}
+				return s3err
+			})
+			if err != nil {
+				panic(err)
 			}
-			toShip = nil
-			increment++
-			lastShipped = time.Now()
+			lastShippedTime = time.Now()
 		}
 		for {
 			select {
@@ -566,17 +507,37 @@ func handleAsyncEvent(ctx context.Context, event *rce.ExecAsyncEvent, res chan<-
 					doneCount++
 					if doneCount == 2 {
 						shipLogs()
-						shipLogsOnDisk()
+						err := logFile.Close()
+						if err != nil {
+							panic(err)
+						}
 						logsDone <- nil
 						return
 					}
-				} else {
-					toShip = append(toShip, *line)
+				} else if *line != "" {
+					logLock.Lock()
+					val := *line + "\n"
+					if logFileSize >= rce.MaxLogBytes {
+						if logToDisk {
+							_, err = logFileWriter.WriteString("[log truncated]\n")
+							if err != nil {
+								panic(err)
+							}
+							logToDisk = false
+						}
+					} else {
+						_, err = logFileWriter.WriteString(val)
+						if err != nil {
+							panic(err)
+						}
+						logFileSize += len(val)
+					}
+					logLock.Unlock()
 				}
-			case <-time.After(logShipInterval):
+			case <-time.After(rce.LogShipInterval):
 				// check if logs need to be shipped even when no new output
 			}
-			if time.Since(lastShipped) > logShipInterval {
+			if time.Since(lastShippedTime) > rce.LogShipInterval {
 				shipLogs()
 			}
 		}
@@ -593,12 +554,24 @@ func handleAsyncEvent(ctx context.Context, event *rce.ExecAsyncEvent, res chan<-
 			exitCode = 1
 		}
 	}
-	key := fmt.Sprintf("jobs/%s/%s/exit", event.AuthName, event.Uid)
+	exitKey := fmt.Sprintf("jobs/%s/%s/exit", event.AuthName, event.Uid)
 	err = lib.Retry(ctx, func() error {
 		_, err := lib.S3Client().PutObject(&s3.PutObjectInput{
 			Bucket: aws.String(bucket),
-			Key:    aws.String(key),
+			Key:    aws.String(exitKey),
 			Body:   bytes.NewReader([]byte(fmt.Sprint(exitCode))),
+		})
+		return err
+	})
+	if err != nil {
+		panic(err)
+	}
+	sizeKey := fmt.Sprintf("jobs/%s/%s/size", event.AuthName, event.Uid)
+	err = lib.Retry(ctx, func() error {
+		_, err := lib.S3Client().PutObject(&s3.PutObjectInput{
+			Bucket: aws.String(bucket),
+			Key:    aws.String(sizeKey),
+			Body:   bytes.NewReader([]byte(fmt.Sprint(logFileSize))),
 		})
 		return err
 	})

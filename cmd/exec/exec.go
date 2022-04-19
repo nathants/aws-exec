@@ -32,7 +32,7 @@ func exec() {
 	url := fmt.Sprintf("https://%s", domain)
 	ctx := context.Background()
 	callback := func(logs string) {
-		fmt.Println(logs)
+		fmt.Print(logs)
 	}
 	exitCode, err := rce.Exec(ctx, url, auth, args.Argv, callback)
 	if err != nil {

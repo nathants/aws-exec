@@ -147,25 +147,26 @@
         :else (do (swap! state assoc :loading false)
                   (throw "failed after several tries"))))))
 
-(defn exec-api-get [uid increment]
+(defn exec-api-get [uid range-start]
   (go-loop [i 0]
     (let [resp (<! (http/get (str api-url "/api/exec")
                              {:query-params {:uid uid
-                                             :increment increment}
+                                             :range-start range-start}
                               :headers {"auth" (:auth @state)}
                               :with-credentials? false}))]
       (cond
         (= 200 (:status resp)) resp
-        (= 409 (:status resp)) resp
         (< i max-retries) (do (<! (a/timeout (* i 100)))
                               (recur (inc i)))
         :else (throw "failed after several tries")))))
 
-(defn s3-log-get [log-url]
+(defn s3-log-get [log-url range-start]
   (go-loop [i 0]
-    (let [resp (<! (http/get log-url {:with-credentials? false}))]
+    (let [resp (<! (http/get log-url {:with-credentials? false
+                                      :headers {"range" (str "bytes=" range-start "-")}}))]
       (cond
-        (= 200 (:status resp)) resp
+        (#{200 206} (:status resp)) (:body resp)
+        (#{403 416} (:status resp)) nil
         (< i max-retries) (do (<! (a/timeout (* i 100)))
                               (recur (inc i)))
         :else (throw "failed after several tries")))))
@@ -182,20 +183,18 @@
           _ (swap! state assoc :search-text "")
           _ (swap! state assoc :offset 0)
           uid (<! (exec-api-post cmd))]
-      (loop [increment 0]
-        (let [resp (<! (exec-api-get uid increment))]
-          (condp = (:status resp)
-            200 (if-let [exit-code (:exit-code (:body resp))]
-                  (swap! state #(-> %
-                                  (update-in [:events] conj (str "exit code: " exit-code))
-                                  (assoc :loading false)))
-                  (let [new-increment (:increment (:body resp))
-                        log-url (:log (:body resp))
-                        event (:body (<! (s3-log-get log-url)))]
-                    (swap! state update-in [:events] #(vec (take-last max-events (conj % event))))
-                    (recur new-increment)))
-            409 (do (<! (a/timeout 1000))
-                    (recur increment))))))))
+      (loop [range-start 0]
+        (let [resp (<! (exec-api-get uid range-start))]
+          (when (= 200 (:status resp))
+            (if-let [exit (:exit (:body resp))]
+              (swap! state #(-> %
+                              (update-in [:events] conj (str "exit: " exit))
+                              (assoc :loading false)))
+              (if-let [data (<! (s3-log-get (:url (:body resp)) range-start))]
+                (do (swap! state update-in [:events] #(vec (take-last max-events (conj % data))))
+                    (recur (+ range-start (count data))))
+                (do (<! (a/timeout 3000))
+                    (recur range-start))))))))))
 
 (defn keydown-listener [e]
   (cond

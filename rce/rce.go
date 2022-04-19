@@ -7,7 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"time"
 
@@ -15,18 +15,20 @@ import (
 	"golang.org/x/crypto/blake2b"
 )
 
-const EventExec = "exec"
+const (
+	EventExec       = "exec"
+	MaxLogBytes     = 1024 * 1024 * 32 // 30MB takes ~3s to write to s3 from 128mb lambda
+	LogShipInterval = 3 * time.Second
+)
 
 type ExecGetRequest struct {
-	Uid       string `json:"uid"`
-	Increment *int   `json:"increment"`
+	Uid        string `json:"uid"`
+	RangeStart int    `json:"range-start"`
 }
 
 type ExecGetResponse struct {
-	HttpCode  int    `json:"http-code"`
-	ExitCode  *int   `json:"exit-code"`
-	Increment *int   `json:"increment"`
-	LogUrl    string `json:"log"`
+	Exit *int   `json:"exit"`
+	Url  string `json:"url"`
 }
 
 type ExecPostRequest struct {
@@ -91,7 +93,7 @@ func Exec(ctx context.Context, url, auth string, argv []string, logDataCallback 
 			return err
 		}
 		defer func() { _ = out.Body.Close() }()
-		data, err = ioutil.ReadAll(out.Body)
+		data, err = io.ReadAll(out.Body)
 		if err != nil {
 			return err
 		}
@@ -105,24 +107,19 @@ func Exec(ctx context.Context, url, auth string, argv []string, logDataCallback 
 		if fmt.Sprint(out.StatusCode)[:1] == "5" {
 			return fmt.Errorf("%d %s", out.StatusCode, string(data))
 		}
-		if out.StatusCode == 409 {
-			return fmt.Errorf("%d %s", out.StatusCode, string(data))
-		}
 		panic(fmt.Sprintf("%d %s", out.StatusCode, string(data)))
 	})
 	if err != nil {
 		lib.Logger.Println("error:", err)
 		return -1, err
 	}
-
 	lib.Logger.Println("uid:", postResponse.Uid)
-
-	increment := 0
+	rangeStart := 0
 	for {
 		getResp := ExecGetResponse{}
 		err := lib.RetryAttempts(ctx, 7, func() error {
 			client := http.Client{}
-			req, err := http.NewRequest(http.MethodGet, url+fmt.Sprintf("/api/exec?uid=%s&increment=%d", postResponse.Uid, increment), nil)
+			req, err := http.NewRequest(http.MethodGet, url+fmt.Sprintf("/api/exec?uid=%s&range-start=%d", postResponse.Uid, rangeStart), nil)
 			if err != nil {
 				return err
 			}
@@ -132,55 +129,66 @@ func Exec(ctx context.Context, url, auth string, argv []string, logDataCallback 
 				return err
 			}
 			defer func() { _ = out.Body.Close() }()
-			data, err := ioutil.ReadAll(out.Body)
+			data, err := io.ReadAll(out.Body)
 			if err != nil {
 				return err
 			}
-			if out.StatusCode != 200 && out.StatusCode != 409 {
+			if out.StatusCode != 200 {
 				return fmt.Errorf("%d %s\n%s", out.StatusCode, out.Request.URL, string(data))
 			}
 			err = json.Unmarshal(data, &getResp)
 			if err != nil {
 				return err
 			}
-			getResp.HttpCode = out.StatusCode
 			return nil
 		})
 		if err != nil {
 			lib.Logger.Println("error:", err)
 			return -1, err
 		}
-		if getResp.HttpCode == 409 {
-			lib.Logger.Println("waiting", postResponse.Uid, time.Now())
-			time.Sleep(1 * time.Second)
-			continue
+		if getResp.Exit != nil {
+			return *getResp.Exit, nil
 		}
-		if getResp.ExitCode != nil {
-			return *getResp.ExitCode, nil
-		}
-		if getResp.Increment != nil {
-			var data []byte
-			err := lib.RetryAttempts(ctx, 7, func() error {
-				out, err := http.Get(getResp.LogUrl)
-				if err != nil {
-					return err
-				}
-				data, err = ioutil.ReadAll(out.Body)
-				if err != nil {
-					return err
-				}
-				_ = out.Body.Close()
-				return nil
-			})
+		var data []byte
+		err = lib.RetryAttempts(ctx, 7, func() error {
+			req, err := http.NewRequest(http.MethodGet, getResp.Url, nil)
 			if err != nil {
-				lib.Logger.Println("error:", err)
-				return -1, err
+				return err
 			}
-			logDataCallback(string(data))
-			increment = *getResp.Increment
-			continue
+			req.Header.Set("range", fmt.Sprintf("bytes=%d-", rangeStart))
+			out, err := http.DefaultClient.Do(req)
+			if err != nil {
+				return err
+			}
+			data, err = io.ReadAll(out.Body)
+			if err != nil {
+				return err
+			}
+			err = out.Body.Close()
+			if err != nil {
+				return err
+			}
+			switch out.StatusCode {
+			case 200, 206:
+				return nil
+			case 403, 416:
+				time.Sleep(LogShipInterval)
+				data = nil
+				return nil
+			default:
+				data = nil
+				err := fmt.Errorf("http %d", out.StatusCode)
+				lib.Logger.Println("error:", err)
+				return err
+			}
+		})
+		if err != nil {
+			lib.Logger.Println("error:", err)
+			return -1, err
 		}
-		panic("unreachable\n" + lib.Pformat(getResp))
+		if len(data) > 0 {
+			logDataCallback(string(data))
+			rangeStart += len(data)
+		}
 	}
-
 }
