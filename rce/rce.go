@@ -32,8 +32,15 @@ type ExecGetResponse struct {
 	Url  string `json:"url"`
 }
 
+type PushUrls struct {
+	Log  string `json:"log"`
+	Size string `json:"size"`
+	Exit string `json:"exit"`
+}
+
 type ExecPostRequest struct {
-	Argv []string `json:"argv"`
+	Argv     []string  `json:"argv"`
+	PushUrls *PushUrls `json:"push-urls"`
 }
 
 type ExecPostResponse struct {
@@ -41,10 +48,11 @@ type ExecPostResponse struct {
 }
 
 type ExecAsyncEvent struct {
-	EventType string   `json:"event-type"`
-	AuthName  string   `json:"auth-name"`
-	Uid       string   `json:"uid"`
-	Argv      []string `json:"argv"`
+	EventType string    `json:"event-type"`
+	AuthName  string    `json:"auth-name"`
+	Uid       string    `json:"uid"`
+	Argv      []string  `json:"argv"`
+	PushUrls  *PushUrls `json:"push-urls"`
 }
 
 type RecordKey struct {
@@ -83,12 +91,26 @@ func CaseInsensitiveGet(m map[string]string, k string) (string, bool) {
 	return "", false
 }
 
-func Exec(ctx context.Context, url, auth string, argv []string, logDataCallback func(logs string)) (int, error) {
+// if pushUrls are not provided, data will be persisted by aws-rce and
+// this function will poll until process completion, pulling log data
+// as it is available and invoking logDataCallback, then returning the
+// exit code.
+//
+// if pushUrls are provided, data will be persisted at those urls via
+// http put with content-length set, and this function will exit
+// immediately with exit code -1. urls should remain valid for 20
+// minutes. log will be pushed repeatedly with the entire log
+// contents. exit will be pushed once and will contain the exit
+// code. size will be pushed once, will be pushed last, and will
+// contain the size of the final log push.
+//
+func Exec(ctx context.Context, url, auth string, argv []string, logDataCallback func(logs string), pushUrls *PushUrls) (int, error) {
 	postResponse := ExecPostResponse{}
 	err := lib.RetryAttempts(ctx, 7, func() error {
 		client := http.Client{}
 		data, err := json.Marshal(ExecPostRequest{
-			Argv: argv,
+			Argv:     argv,
+			PushUrls: pushUrls,
 		})
 		if err != nil {
 			return err
@@ -124,6 +146,10 @@ func Exec(ctx context.Context, url, auth string, argv []string, logDataCallback 
 		return -1, err
 	}
 	lib.Logger.Println("uid:", postResponse.Uid)
+	if pushUrls != nil {
+		lib.Logger.Println("log, size, and exit will be pushed to the provided urls")
+		return -1, nil
+	}
 	rangeStart := 0
 	for {
 		getResp := ExecGetResponse{}

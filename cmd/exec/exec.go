@@ -34,7 +34,7 @@ func exec() {
 	callback := func(logs string) {
 		fmt.Print(logs)
 	}
-	exitCode, err := rce.Exec(ctx, url, auth, args.Argv, callback)
+	exitCode, err := rce.Exec(ctx, url, auth, args.Argv, callback, nil)
 	if err != nil {
 		lib.Logger.Fatal("error: ", err)
 	}
