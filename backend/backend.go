@@ -56,14 +56,6 @@ import (
 	"github.com/nathants/cli-aws/lib"
 )
 
-func corsHeaders() map[string]string {
-	return map[string]string{
-		"Access-Control-Allow-Origin":  "*",
-		"Access-Control-Allow-Methods": "POST, GET, OPTIONS, PUT, DELETE",
-		"Access-Control-Allow-Headers": "auth, content-type",
-	}
-}
-
 func index() events.APIGatewayProxyResponse {
 	headers := map[string]string{
 		"Content-Type": "text/html; charset=UTF-8",
@@ -164,9 +156,10 @@ func httpExecGet(ctx context.Context, event *events.APIGatewayProxyRequest, res 
 		Uid:        event.QueryStringParameters["uid"],
 		RangeStart: atoi(event.QueryStringParameters["range-start"]),
 	}
-	headers := corsHeaders()
-	headers["auth-name"] = authName
-	headers["uid"] = getRequest.Uid
+	headers := map[string]string{
+		"auth-name": authName,
+		"uid":       getRequest.Uid,
+	}
 	sizeKey := fmt.Sprintf("jobs/%s/%s/size", authName, getRequest.Uid)
 	exitKey := fmt.Sprintf("jobs/%s/%s/exit", authName, getRequest.Uid)
 	logKey := fmt.Sprintf("jobs/%s/%s/log.txt", authName, getRequest.Uid)
@@ -263,9 +256,10 @@ func httpExecPost(ctx context.Context, event *events.APIGatewayProxyRequest, res
 	if err != nil {
 		panic(err)
 	}
-	headers := corsHeaders()
-	headers["auth-name"] = authName
-	headers["uid"] = uid
+	headers := map[string]string{
+		"auth-name": authName,
+		"uid":       uid,
+	}
 	out, err := lib.LambdaClient().InvokeWithContext(ctx, &sdkLambda.InvokeInput{
 		FunctionName:   aws.String(os.Getenv("AWS_LAMBDA_FUNCTION_NAME")),
 		InvocationType: aws.String(sdkLambda.InvocationTypeEvent),
@@ -345,7 +339,6 @@ func handleApiEvent(ctx context.Context, event *events.APIGatewayProxyRequest, r
 		if event.HTTPMethod == http.MethodOptions {
 			res <- events.APIGatewayProxyResponse{
 				StatusCode: 200,
-				Headers:    corsHeaders(),
 			}
 			return
 		}
@@ -390,7 +383,6 @@ func unauthorized() events.APIGatewayProxyResponse {
 	time.Sleep(1 * time.Second)
 	return events.APIGatewayProxyResponse{
 		StatusCode: 401,
-		Headers:    corsHeaders(),
 	}
 }
 
@@ -401,7 +393,6 @@ func logRecover(r interface{}, res chan<- events.APIGatewayProxyResponse) {
 	res <- events.APIGatewayProxyResponse{
 		StatusCode: 500,
 		Body:       fmt.Sprint(r) + "\n" + stack,
-		Headers:    corsHeaders(),
 	}
 }
 
