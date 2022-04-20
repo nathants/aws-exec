@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/nathants/cli-aws/lib"
@@ -71,6 +72,15 @@ func RandKey() string {
 		panic(err)
 	}
 	return hex.EncodeToString(val)
+}
+
+func CaseInsensitiveGet(m map[string]string, k string) (string, bool) {
+	for mk, mv := range m {
+		if strings.EqualFold(mk, k) {
+			return mv, true
+		}
+	}
+	return "", false
 }
 
 func Exec(ctx context.Context, url, auth string, argv []string, logDataCallback func(logs string)) (int, error) {

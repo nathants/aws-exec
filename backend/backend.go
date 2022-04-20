@@ -349,8 +349,13 @@ func handleApiEvent(ctx context.Context, event *events.APIGatewayProxyRequest, r
 			}
 			return
 		}
-		authName, authOk := checkAuth(ctx, event.Headers["auth"])
-		if !authOk {
+		auth, ok := rce.CaseInsensitiveGet(event.Headers, "auth")
+		if !ok {
+			res <- unauthorized()
+			return
+		}
+		authName, ok := checkAuth(ctx, auth)
+		if !ok {
 			res <- unauthorized()
 			return
 		}

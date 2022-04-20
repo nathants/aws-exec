@@ -123,15 +123,11 @@
     (.click a)
     (.remove a)))
 
-(goog-define domain "") ;; defined via environment variable PROJECT_DOMAIN
-
-(def api-url (str "https://" domain))
-
 (def max-retries 7)
 
 (defn exec-api-post [cmd]
   (go-loop [i 0]
-    (let [resp (<! (http/post (str api-url "/api/exec")
+    (let [resp (<! (http/post "/api/exec"
                               {:headers {"auth" (:auth @state)}
                                :json-params {:argv ["bash" "-c" cmd]}
                                :with-credentials? false}))]
@@ -149,7 +145,7 @@
 
 (defn exec-api-get [uid range-start]
   (go-loop [i 0]
-    (let [resp (<! (http/get (str api-url "/api/exec")
+    (let [resp (<! (http/get "/api/exec"
                              {:query-params {:uid uid
                                              :range-start range-start}
                               :headers {"auth" (:auth @state)}

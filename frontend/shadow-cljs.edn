@@ -6,9 +6,9 @@
                 [funcool/bide "1.7.0"]
                 [reagent "1.1.1"]]
  :nrepl {:port 3333}
- :dev-http {8000 "public"}
+ :dev-http {8000 {:root "public"
+                  :proxy-url #shadow/env "PROJECT_URL"}}
  :builds {:app {:target :browser
                 :output-dir "public/js"
                 :js-options {:js-provider :shadow}
-                :modules {:main {:init-fn frontend/main}}
-                :closure-defines {frontend/domain #shadow/env "PROJECT_DOMAIN"}}}}
+                :modules {:main {:init-fn frontend/main}}}}}
