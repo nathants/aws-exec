@@ -261,17 +261,23 @@ func httpExecPost(ctx context.Context, event *events.APIGatewayProxyRequest, res
 		"auth-name": authName,
 		"uid":       uid,
 	}
-	out, err := lib.LambdaClient().InvokeWithContext(ctx, &sdkLambda.InvokeInput{
-		FunctionName:   aws.String(os.Getenv("AWS_LAMBDA_FUNCTION_NAME")),
-		InvocationType: aws.String(sdkLambda.InvocationTypeEvent),
-		LogType:        aws.String(sdkLambda.LogTypeNone),
-		Payload:        data,
+	err = lib.Retry(ctx, func() error {
+		out, err := lib.LambdaClient().InvokeWithContext(ctx, &sdkLambda.InvokeInput{
+			FunctionName:   aws.String(os.Getenv("AWS_LAMBDA_FUNCTION_NAME")),
+			InvocationType: aws.String(sdkLambda.InvocationTypeEvent),
+			LogType:        aws.String(sdkLambda.LogTypeNone),
+			Payload:        data,
+		})
+		if err != nil {
+			return err
+		}
+		if *out.StatusCode != 202 {
+			return fmt.Errorf("status %d", *out.StatusCode)
+		}
+		return nil
 	})
 	if err != nil {
 		panic(err)
-	}
-	if *out.StatusCode != 202 {
-		panic(out.StatusCode)
 	}
 	data, err = json.Marshal(rce.ExecPostResponse{
 		Uid: uid,
