@@ -145,9 +145,7 @@ func Exec(ctx context.Context, url, auth string, argv []string, logDataCallback 
 		lib.Logger.Println("error:", err)
 		return -1, err
 	}
-	lib.Logger.Println("uid:", postResponse.Uid)
 	if pushUrls != nil {
-		lib.Logger.Println("log, size, and exit will be pushed to the provided urls")
 		return -1, nil
 	}
 	rangeStart := 0
