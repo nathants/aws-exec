@@ -169,6 +169,9 @@
 
 (def max-events 256)
 
+(defn byte-size [s]
+  (.-length (.encode (js/TextEncoder.) s)))
+
 (defn submit-command []
   (go
     (swap! state merge {:loading true
@@ -188,7 +191,7 @@
                               (assoc :loading false)))
               (if-let [data (<! (s3-log-get (:url (:body resp)) range-start))]
                 (do (swap! state update-in [:events] #(vec (take-last max-events (conj % data))))
-                    (recur (+ range-start (count data))))
+                    (recur (+ range-start (byte-size data))))
                 (do (<! (a/timeout 3000))
                     (recur range-start))))))))))
 
