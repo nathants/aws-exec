@@ -29,18 +29,20 @@ func (authLsArgs) Description() string {
 func authLs() {
 	var args authLsArgs
 	arg.MustParse(&args)
-
 	table := os.Getenv("PROJECT_NAME")
-	_ = os.Getenv("PROJECT_DOMAIN")
-
 	var start map[string]*dynamodb.AttributeValue
 	for {
-		out, err := lib.DynamoDBClient().ScanWithContext(context.Background(), &dynamodb.ScanInput{
-			TableName:         aws.String(table),
-			ExclusiveStartKey: start,
+		var out *dynamodb.ScanOutput
+		err := lib.Retry(context.Background(), func() error {
+			var err error
+			out, err = lib.DynamoDBClient().ScanWithContext(context.Background(), &dynamodb.ScanInput{
+				TableName:         aws.String(table),
+				ExclusiveStartKey: start,
+			})
+			return err
 		})
 		if err != nil {
-			panic(err)
+			lib.Logger.Fatal("error: ", err)
 		}
 		for _, item := range out.Items {
 			val := rce.Record{}

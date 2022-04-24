@@ -128,21 +128,29 @@ func checkAuth(ctx context.Context, auth string) (string, bool) {
 		ID: fmt.Sprintf("auth.%s", rce.Blake2b32(auth)),
 	})
 	if err != nil {
-		return "", false
+		panic(err)
 	}
 	table := os.Getenv("PROJECT_NAME")
-	out, err := lib.DynamoDBClient().GetItemWithContext(ctx, &dynamodb.GetItemInput{
-		TableName:      aws.String(table),
-		ConsistentRead: aws.Bool(true),
-		Key:            key,
+	var out *dynamodb.GetItemOutput
+	err = lib.Retry(ctx, func() error {
+		var err error
+		out, err = lib.DynamoDBClient().GetItemWithContext(ctx, &dynamodb.GetItemInput{
+			TableName:      aws.String(table),
+			ConsistentRead: aws.Bool(true),
+			Key:            key,
+		})
+		return err
 	})
 	if err != nil {
+		panic(err)
+	}
+	if out.Item == nil {
 		return "", false
 	}
 	val := rce.Record{}
 	err = dynamodbattribute.UnmarshalMap(out.Item, &val)
 	if err != nil {
-		return "", false
+		panic(err)
 	}
 	if val.Value == "" {
 		return "", false

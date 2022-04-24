@@ -1,6 +1,7 @@
 package awsrce
 
 import (
+	"context"
 	"fmt"
 	"os"
 
@@ -28,9 +29,7 @@ func (authNewArgs) Description() string {
 func authNew() {
 	var args authNewArgs
 	arg.MustParse(&args)
-
 	table := os.Getenv("PROJECT_NAME")
-
 	key := rce.RandKey()
 	item, err := dynamodbattribute.MarshalMap(rce.Record{
 		RecordKey: rce.RecordKey{
@@ -43,9 +42,12 @@ func authNew() {
 	if err != nil {
 		lib.Logger.Fatal("error: ", err)
 	}
-	_, err = lib.DynamoDBClient().PutItem(&dynamodb.PutItemInput{
-		Item:      item,
-		TableName: aws.String(table),
+	err = lib.Retry(context.Background(), func() error {
+		_, err := lib.DynamoDBClient().PutItem(&dynamodb.PutItemInput{
+			Item:      item,
+			TableName: aws.String(table),
+		})
+		return err
 	})
 	if err != nil {
 		lib.Logger.Fatal("error: ", err)

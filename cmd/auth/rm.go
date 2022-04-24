@@ -1,6 +1,7 @@
 package awsrce
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strings"
@@ -29,9 +30,7 @@ func (authRmArgs) Description() string {
 func authRm() {
 	var args authRmArgs
 	arg.MustParse(&args)
-
 	table := os.Getenv("PROJECT_NAME")
-
 	id := args.Auth
 	if !strings.HasPrefix(id, "auth.") {
 		id = fmt.Sprintf("auth.%s", id)
@@ -42,9 +41,12 @@ func authRm() {
 	if err != nil {
 		lib.Logger.Fatal("error: ", err)
 	}
-	_, err = lib.DynamoDBClient().DeleteItem(&dynamodb.DeleteItemInput{
-		TableName: aws.String(table),
-		Key:       key,
+	err = lib.Retry(context.Background(), func() error {
+		_, err := lib.DynamoDBClient().DeleteItem(&dynamodb.DeleteItemInput{
+			TableName: aws.String(table),
+			Key:       key,
+		})
+		return err
 	})
 	if err != nil {
 		lib.Logger.Fatal("error: ", err)
