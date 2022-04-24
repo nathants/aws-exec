@@ -48,7 +48,7 @@ func authLs() {
 			val := rce.Record{}
 			err := dynamodbattribute.UnmarshalMap(item, &val)
 			if err != nil {
-				panic(err)
+			    lib.Logger.Fatal("error: ", err)
 			}
 			if strings.HasPrefix(val.ID, "auth.") {
 				fmt.Println(val.ID, val.Value)
