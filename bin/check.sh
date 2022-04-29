@@ -1,4 +1,12 @@
 #!/bin/bash
+
+out=$(mktemp)
+trap "rm $out &>/dev/null || true" EXIT
+
+bash -c "cd frontend && npx shadow-cljs compile app > $out 2>/dev/null" &
+pid=$!
+trap "kill -9 $pid &>/dev/null || true" EXIT
+
 set -eou pipefail
 
 which staticcheck >/dev/null   || (cd ~ && go install honnef.co/go/tools/cmd/staticcheck@latest)
@@ -35,3 +43,14 @@ errcheck ./...
 
 echo go vet
 go vet ./...
+
+echo go build
+go build -o /dev/null backend/backend.go
+go build -o /dev/null main.go
+
+wait $pid
+echo shadow-cljs compile
+if cat $out | grep -i -e warning -e error &>/dev/null; then
+    cat $out
+    exit 1
+fi
