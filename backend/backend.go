@@ -165,8 +165,9 @@ func httpExecGet(ctx context.Context, event *events.APIGatewayProxyRequest, res 
 		RangeStart: atoi(event.QueryStringParameters["range-start"]),
 	}
 	headers := map[string]string{
-		"auth-name": authName,
-		"uid":       getRequest.Uid,
+		"auth-name":    authName,
+		"uid":          getRequest.Uid,
+		"Content-Type": "application/json",
 	}
 	sizeKey := fmt.Sprintf("jobs/%s/%s/size", authName, getRequest.Uid)
 	exitKey := fmt.Sprintf("jobs/%s/%s/exit", authName, getRequest.Uid)
@@ -266,8 +267,9 @@ func httpExecPost(ctx context.Context, event *events.APIGatewayProxyRequest, res
 		panic(err)
 	}
 	headers := map[string]string{
-		"auth-name": authName,
-		"uid":       uid,
+		"auth-name":    authName,
+		"uid":          uid,
+		"Content-Type": "application/json",
 	}
 	err = lib.Retry(ctx, func() error {
 		out, err := lib.LambdaClient().InvokeWithContext(ctx, &sdkLambda.InvokeInput{
