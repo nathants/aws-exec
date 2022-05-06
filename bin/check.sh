@@ -16,6 +16,10 @@ which errcheck    >/dev/null   || (cd ~ && go install github.com/kisielk/errchec
 which bodyclose   >/dev/null   || (cd ~ && go install github.com/timakin/bodyclose@latest)
 which nargs       >/dev/null   || (cd ~ && go install github.com/alexkohler/nargs/cmd/nargs@latest)
 which go-hasdefault >/dev/null || (cd ~ && go install github.com/nathants/go-hasdefault@latest)
+which go-hasdefer >/dev/null || (cd ~ && go install github.com/nathants/go-hasdefer@latest)
+
+echo go-hasdefer
+go-hasdefer $(find -type f -name "*.go") || true
 
 echo go-hasdefault
 go-hasdefault $(find -type f -name "*.go") || true

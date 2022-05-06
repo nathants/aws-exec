@@ -427,6 +427,7 @@ func handleAsyncEvent(ctx context.Context, event *rce.ExecAsyncEvent, res chan<-
 	}
 	lines := make(chan *string, 128)
 	go func() {
+		// defer func() {}()
 		for {
 			if time.Since(start) > 14*time.Minute {
 				lines <- aws.String("timeout after 14 minutes")
@@ -444,6 +445,7 @@ func handleAsyncEvent(ctx context.Context, event *rce.ExecAsyncEvent, res chan<-
 	for _, r := range []io.ReadCloser{stdout, stderr} {
 		r := r
 		go func() {
+			// defer func() {}()
 			readBuf := bufio.NewReader(r)
 			for {
 				line, err := readBuf.ReadString('\n')
@@ -459,6 +461,11 @@ func handleAsyncEvent(ctx context.Context, event *rce.ExecAsyncEvent, res chan<-
 	logsDone := make(chan error)
 	logFileSize := 0
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				logRecover(r, res)
+			}
+		}()
 		logToDisk := true
 		doneCount := 0
 		lastShippedTime := time.Now()
@@ -507,6 +514,11 @@ func handleAsyncEvent(ctx context.Context, event *rce.ExecAsyncEvent, res chan<-
 					pr, pw := io.Pipe()
 					errChan := make(chan error)
 					go func() {
+						defer func() {
+							if r := recover(); r != nil {
+								logRecover(r, res)
+							}
+						}()
 						_, copyErr := io.CopyN(pw, r, int64(size))
 						err = pw.Close()
 						if err != nil {
@@ -798,6 +810,7 @@ func setupLogging(ctx context.Context) {
 		},
 	}
 	go func() {
+		// defer func() {}()
 		for {
 			lib.Logger.Flush()
 			select {
