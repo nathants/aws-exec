@@ -22,4 +22,4 @@ if [ -z "${NOJS:-}" ]; then
     rm $temp frontend/public/js/*
 fi
 
-cli-aws lambda-ensure backend/*.go 2>&1 | sed 's/^/cli-aws: /'
+libaws infra-ensure infra.yaml 2>&1 | sed 's/^/libaws: /'

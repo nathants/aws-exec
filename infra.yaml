@@ -1,0 +1,42 @@
+name: aws-rce
+
+dynamodb:
+  ${PROJECT_NAME}:
+    key:
+      - id:s:hash
+
+s3:
+  ${PROJECT_BUCKET}:
+    attr:
+      - cors=true
+      - acl=private
+      - ttldays=1
+lambda:
+  ${PROJECT_NAME}:
+    entrypoint: backend/backend.go
+    attr:
+      - concurrency=0
+      - memory=128
+      - timeout=900
+      - logs-ttl-days=1
+    trigger:
+      - type: api
+        attr:
+          - dns=${PROJECT_DOMAIN}
+      - type: schedule
+        attr:
+          - rate(5 minutes)
+    policy:
+      - AWSLambdaBasicExecutionRole
+    allow:
+      - dynamodb:* arn:aws:dynamodb:*:*:table/${PROJECT_NAME}
+      - s3:* arn:aws:s3:::${PROJECT_BUCKET}/*
+      - lambda:InvokeFunction arn:aws:lambda:*:*:function:${PROJECT_NAME}
+    include:
+      - ./frontend/public/index.html.gzip
+      - ./frontend/public/favicon.png
+    env:
+      - PROJECT_NAME=${PROJECT_NAME}
+      - PROJECT_DOMAIN=${PROJECT_DOMAIN}
+      - PROJECT_URL=${PROJECT_URL}
+      - PROJECT_BUCKET=${PROJECT_BUCKET}

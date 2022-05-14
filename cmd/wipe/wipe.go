@@ -1,6 +1,6 @@
 package awsrce
 
-import "github.com/nathants/cli-aws/lib"
+import "github.com/nathants/libaws/lib"
 
 func init() {
 	lib.Args = make(map[string]lib.ArgsStruct)

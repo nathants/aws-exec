@@ -1,23 +1,3 @@
-//
-// attr: name ${PROJECT_NAME}
-// attr: concurrency 0
-// attr: memory 128
-// attr: timeout 900
-//
-// dynamodb: ${PROJECT_NAME} id:s:hash
-// s3: ${PROJECT_BUCKET} cors=true acl=private ttldays=1
-//
-// trigger: api dns=${PROJECT_DOMAIN}
-// trigger: cloudwatch rate(5 minutes)
-//
-// allow: dynamodb:* arn:aws:dynamodb:*:*:table/${PROJECT_NAME}
-// allow: s3:* arn:aws:s3:::${PROJECT_BUCKET}/*
-// allow: lambda:InvokeFunction arn:aws:lambda:*:*:function:${PROJECT_NAME}
-//
-// include: ../frontend/public/index.html.gzip
-// include: ../frontend/public/favicon.png
-//
-
 package main
 
 import (
@@ -53,7 +33,7 @@ import (
 	"github.com/dustin/go-humanize"
 	uuid "github.com/gofrs/uuid"
 	"github.com/nathants/aws-rce/rce"
-	"github.com/nathants/cli-aws/lib"
+	"github.com/nathants/libaws/lib"
 )
 
 func index() events.APIGatewayProxyResponse {
@@ -804,8 +784,7 @@ func setupLogging(ctx context.Context) {
 				return err
 			})
 			if err != nil {
-				lib.Logger.Println("error:", err)
-				return
+				fmt.Println(err)
 			}
 		},
 	}

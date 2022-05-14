@@ -11,5 +11,5 @@ RUN pacman -Sy --noconfirm \
     zip \
     which
 
-RUN go install github.com/nathants/cli-aws@latest && \
+RUN go install github.com/nathants/libaws@latest && \
     mv -fv ~/go/bin/* /usr/local/bin

@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/nathants/cli-aws/lib"
+	"github.com/nathants/libaws/lib"
 	"golang.org/x/crypto/blake2b"
 )
 

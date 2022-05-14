@@ -12,4 +12,4 @@ source env.sh
 pid=$!
 trap "kill $pid &>/dev/null || true" EXIT
 
-find -type f | grep -F -v -e .shadow-cljs -e backups -e node_modules | entr -r cli-aws lambda-ensure backend/*.go -q 2>&1 | sed 's/^/cli-aws: /'
+find -type f | grep -F -v -e .shadow-cljs -e backups -e node_modules | entr -r libaws lambda-ensure backend/*.go -q 2>&1 | sed 's/^/libaws: /'

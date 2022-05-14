@@ -11,7 +11,9 @@ adhoc execution in lambda with streaming logs, exitcode, and 15 minutes max dura
 ## deploy
 
 ```bash
-go install github.com/nathants/cli-aws@latest
+go install github.com/nathants/libaws@latest
+export PATH=$PATH:$(go env GOPATH)/bin
+
 cp env.sh.template env.sh # update values
 bash bin/check.sh         # lint
 bash bin/deploy.sh        # ensure aws infra and deploy prod release

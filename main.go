@@ -11,7 +11,7 @@ import (
 	_ "github.com/nathants/aws-rce/cmd/auth"
 	_ "github.com/nathants/aws-rce/cmd/exec"
 
-	"github.com/nathants/cli-aws/lib"
+	"github.com/nathants/libaws/lib"
 )
 
 func usage() {
