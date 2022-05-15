@@ -54,7 +54,7 @@ go build -o /dev/null main.go
 
 wait $pid
 echo shadow-cljs compile
-if cat $out | grep -i -e warning -e error &>/dev/null; then
+if cat $out | grep -v 'being replaced by: ' | grep -i -e warning -e error &>/dev/null; then
     cat $out
     exit 1
 fi
