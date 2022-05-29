@@ -4,12 +4,12 @@ go 1.17
 
 require (
 	github.com/alexflint/go-arg v1.4.3
-	github.com/aws/aws-lambda-go v1.31.1
-	github.com/aws/aws-sdk-go v1.44.6
+	github.com/aws/aws-lambda-go v1.32.0
+	github.com/aws/aws-sdk-go v1.44.24
 	github.com/dustin/go-humanize v1.0.0
 	github.com/gofrs/uuid v4.2.0+incompatible
-	github.com/nathants/libaws v0.0.0-20220514084113-5f7c8150adc4
-	golang.org/x/crypto v0.0.0-20220427172511-eb4f295cb31f
+	github.com/nathants/libaws v0.0.0-20220528092433-347400c541e1
+	golang.org/x/crypto v0.0.0-20220525230936-793ad666bf5e
 )
 
 require (
@@ -23,8 +23,8 @@ require (
 	github.com/r3labs/diff/v2 v2.15.1 // indirect
 	github.com/vmihailenco/msgpack v4.0.4+incompatible // indirect
 	golang.org/x/net v0.0.0-20220127200216-cd36cc0744dd // indirect
-	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c // indirect
+	golang.org/x/sync v0.0.0-20220513210516-0976fa681c29 // indirect
 	golang.org/x/sys v0.0.0-20211216021012-1d35b9e2eb4e // indirect
 	google.golang.org/appengine v1.6.6 // indirect
-	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect
+	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
