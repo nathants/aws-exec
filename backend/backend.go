@@ -791,12 +791,11 @@ func setupLogging(ctx context.Context) {
 	go func() {
 		// defer func() {}()
 		for {
-			lib.Logger.Flush()
 			select {
 			case <-ctx.Done():
 				return
-			default:
-				time.Sleep(5 * time.Second)
+			case <-time.After(5 * time.Second):
+				lib.Logger.Flush()
 			}
 		}
 	}()
