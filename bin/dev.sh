@@ -12,4 +12,4 @@ source env.sh
 pid=$!
 trap "kill $pid &>/dev/null || true" EXIT
 
-find -type f | grep -F -v -e .shadow-cljs -e backups -e node_modules | entr -r libaws infra-ensure --quick ${PROJECT_NAME} 2>&1 | sed 's/^/libaws: /'
+find -type f | grep -F -v -e .shadow-cljs -e backups -e node_modules | entr -r bash bin/quick.sh 2>&1 | sed 's/^/libaws: /'
