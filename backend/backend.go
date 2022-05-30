@@ -40,7 +40,7 @@ func index() events.APIGatewayProxyResponse {
 	headers := map[string]string{
 		"Content-Type": "text/html; charset=UTF-8",
 	}
-	indexBytes, err := os.ReadFile("frontend/public/index.html.gzip")
+	indexBytes, err := os.ReadFile("frontend/public/index.html.gz")
 	if err == nil {
 		headers["Content-Encoding"] = "gzip"
 	} else {

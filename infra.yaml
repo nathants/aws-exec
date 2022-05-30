@@ -33,7 +33,7 @@ lambda:
       - s3:* arn:aws:s3:::${PROJECT_BUCKET}/*
       - lambda:InvokeFunction arn:aws:lambda:*:*:function:${PROJECT_NAME}
     include:
-      - ./frontend/public/index.html.gzip
+      - ./frontend/public/index.html.gz
       - ./frontend/public/favicon.png
     env:
       - PROJECT_NAME=${PROJECT_NAME}

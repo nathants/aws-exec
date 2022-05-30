@@ -18,7 +18,7 @@ if [ -z "${NOJS:-}" ]; then
     cat frontend/public/js/main.js >> $temp
     echo '</script>' >> $temp
     cat frontend/public/index.html | grep script -A100 | grep -v script >> $temp
-    cat $temp | gzip --best > frontend/public/index.html.gzip
+    cat $temp | gzip --best > frontend/public/index.html.gz
     rm $temp frontend/public/js/*
 fi
 
