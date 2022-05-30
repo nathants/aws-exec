@@ -1,7 +1,7 @@
 ?/
 aws-rce
 env.sh
-*.gzip
+*.gz
 frontend/public/js/
 frontend/node_modules/*
 
