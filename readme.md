@@ -16,7 +16,7 @@ export PATH=$PATH:$(go env GOPATH)/bin
 
 cp env.sh.template env.sh # update values
 bash bin/check.sh         # lint
-bash bin/deploy.sh        # ensure aws infra and deploy prod release
+bash bin/ensure.sh        # ensure aws infra and deploy prod release
 bash bin/dev.sh           # rapidly iterate by updating lambda zip
 bash bin/cli.sh -h        # interact with the service via the cli
 ```
@@ -34,7 +34,7 @@ docker run -it --rm \
     aws-rce:latest \
     bash -c '
         cd /code
-        bash bin/deploy.sh
+        bash bin/ensure.sh
     '
 ```
 
