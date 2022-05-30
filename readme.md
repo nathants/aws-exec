@@ -84,4 +84,4 @@ export PROJECT_DOMAIN=$DOMAIN
   ```
 
 - browser client
-  ![](./screenshot.png)
+  ![](https://github.com/nathants/aws-rce/raw/master/screenshot.png)
