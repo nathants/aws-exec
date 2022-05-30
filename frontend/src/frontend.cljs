@@ -1,6 +1,7 @@
 (ns frontend
   (:require-macros [cljs.core.async.macros :refer [go go-loop]])
   (:require ["localforage" :as localforage]
+            ["@primer/octicons-react" :as octo]
             [lambdaisland.ansi :as ansi]
             [cljs-http.client :as http]
             [cljs.core.async :refer [<! >! chan put! close! timeout] :as a]
@@ -10,12 +11,15 @@
             [bide.core :as bide]
             [garden.core :as garden]
             [clojure.string :as s]
-            [reagent-mui.material.card :refer [card]]
-            [reagent-mui.material.text-field :refer [text-field]]
-            [reagent-mui.material.container :refer [container]]
-            [reagent-mui.material.linear-progress :refer [linear-progress]]))
+            [reagent-mui.material.card :refer [card] :rename {card mui-card}]
+            [reagent-mui.material.text-field :refer [text-field] :rename {text-field mui-text-field}]
+            [reagent-mui.material.container :refer [container] :rename {container mui-container}]
+            [reagent-mui.material.icon-button :refer [icon-button] :rename {icon-button mui-icon-button}]
+            [reagent-mui.material.linear-progress :refer [linear-progress] :rename {linear-progress mui-linear-progress}]))
 
 (set! *warn-on-infer* true)
+
+(def adapt reagent/adapt-react-class)
 
 (defn log [& args]
   (apply js/console.log (map clj->js args)))
@@ -79,11 +83,12 @@
    {:username ""
     :password ""
     :history []
+    :direction true
     :offset 0
-    :search-focus false
+    :cmd-focus false
     :key-listener false
     :mouse-listener false
-    :search-text ""
+    :cmd-text ""
     :events []
     :loading false
     :page nil
@@ -96,6 +101,7 @@
    ["*" {:font-family "monospace !important"}]
    [:.MuiIconButton-root {:border-radius "10%"}]
    [:.MuiAppBar-colorPrimary {:background-color "rgb(230, 230, 230)"}]
+   [:.MuiIconButton-root:hover {:color "#586e75"}]
    [".menu-button .MuiSvgIcon-root" {:width "40px"
                                      :height "40px"}]))
 
@@ -105,14 +111,10 @@
            :overflow-x :scroll}
    :class "bg-color"})
 
+(def card-style-flex (assoc-in card-style [:style :display] :flex))
+
 (defn auth? []
   (not (s/blank? (:auth @state))))
-
-(defn scroll-down []
-  (mapv #(go
-           (<! (a/timeout (* % 5)))
-           (js/window.scrollTo 0 js/document.body.scrollHeight))
-        (range 20)))
 
 (defn mousedown-listener [e]
   nil)
@@ -167,48 +169,76 @@
                               (recur (inc i)))
         :else (throw "failed after several tries")))))
 
-(def max-events 256)
+(def max-events 1024)
 
 (defn byte-size [s]
   (.-length (.encode (js/TextEncoder.) s)))
 
-(defn submit-command []
-  (go
-    (swap! state merge {:loading true
-                        :search-focus false})
-    (let [cmd (:search-text @state)
-          _ (swap! state update-in [:history] conj cmd)
-          _ (swap! state update-in [:events] #(vec (take-last max-events (conj % (str ">> " cmd)))))
-          _ (swap! state assoc :search-text "")
-          _ (swap! state assoc :offset 0)
-          uid (<! (exec-api-post cmd))]
-      (loop [range-start 0]
-        (let [resp (<! (exec-api-get uid range-start))]
-          (when (= 200 (:status resp))
-            (if-let [exit (:exit (:body resp))]
-              (swap! state #(-> %
-                              (update-in [:events] conj (str "exit: " exit))
-                              (assoc :loading false)))
-              (if-let [data (<! (s3-log-get (:url (:body resp)) range-start))]
-                (do (swap! state update-in [:events] #(vec (take-last max-events (conj % data))))
-                    (recur (+ range-start (byte-size data))))
-                (do (<! (a/timeout 3000))
-                    (recur range-start))))))))))
+(defn scroll-to-cmd []
+  (go (let [start (js/Date.now)]
+        (loop []
+          (if-let [el (js/document.getElementById "cmd")]
+            (.scrollIntoView el #js {"behavior" "smooth"
+                                     "block" "center"
+                                     "inline" "center"})
+            (when (< (- (js/Date.now) start) 5000)
+              (do (<! (a/timeout 20))
+                  (recur))))))))
+
+(defn submit-cmd []
+  (let [cmd (:cmd-text @state)]
+    (cond
+      ;;
+      (= "history clear" cmd)
+      (do (swap! state assoc :history [])
+          (swap! state assoc :cmd-text "")
+          (swap! state assoc :offset 0))
+      ;;
+      (= "history" cmd)
+      (do (swap! state update-in [:history] conj cmd)
+          (swap! state update-in [:events] #(vec (take-last max-events (conj % (take-last 128 (mapv (fn [[i l]]
+                                                                                                      (str (inc i) ". " l))
+                                                                                                    (map vector (range) (:history @state))))))))
+          (swap! state assoc :cmd-text "")
+          (swap! state assoc :offset 0))
+      ;;
+      :else
+      (go (swap! state update-in [:history] conj cmd)
+          (swap! state update-in [:events] #(vec (take-last max-events (conj % [(str ">> " cmd)]))))
+          (swap! state assoc :loading true)
+          (swap! state assoc :cmd-focus false)
+          (swap! state assoc :cmd-text "")
+          (swap! state assoc :cmd-text "")
+          (swap! state assoc :offset 0)
+          (let [uid (<! (exec-api-post cmd))]
+            (loop [range-start 0]
+              (let [resp (<! (exec-api-get uid range-start))]
+                (when (= 200 (:status resp))
+                  (if-let [exit (:exit (:body resp))]
+                    (swap! state #(-> %
+                                    (update-in [:events] conj [(str "exit: " exit)])
+                                    (assoc :loading false)))
+                    (if-let [data (<! (s3-log-get (:url (:body resp)) range-start))]
+                      (do (swap! state update-in [:events] #(vec (take-last max-events (conj % (s/split-lines data)))))
+                          (<! (a/timeout 0))
+                          (recur (+ range-start (byte-size data))))
+                      (do (<! (a/timeout 3000))
+                          (recur range-start))))))))))))
 
 (defn keydown-listener [e]
   (cond
-    (= "Enter" (event-key e)) (when (:search-focus @state)
-                                (submit-command)
+    (= "Enter" (event-key e)) (when (:cmd-focus @state)
+                                (submit-cmd)
                                 (prevent-default e))
-    (#{"INPUT" "TEXTAREA"} (.-tagName js/document.activeElement)) nil
-    (= "/" (event-key e)) (when-not (:search-focus @state)
-                            (swap! state merge {:search-focus true})
-                            (prevent-default e))
-    (= "ArrowUp" (event-key e)) (do (swap! state update-in [:offset] inc)
+    (= "ArrowUp" (event-key e)) (do (swap! state update-in [:offset] #(min (inc %) (count (:history @state))))
                                     (prevent-default e))
-    (= "ArrowDown" (event-key e)) (do (swap! state update-in [:offset] dec)
+    (= "ArrowDown" (event-key e)) (do (swap! state update-in [:offset] #(max 0 (dec %)))
                                       (prevent-default e))
-    :else (log :key (event-key e))))
+    (#{"INPUT" "TEXTAREA"} (.-tagName js/document.activeElement)) nil
+    (= "/" (event-key e)) (when-not (:cmd-focus @state)
+                            (swap! state merge {:cmd-focus true})
+                            (prevent-default e))
+    :else nil #_(log :key (event-key e))))
 
 (defn url []
   (last (s/split js/window.location.href #"#/")))
@@ -222,28 +252,29 @@
                                      (get new key))
                            (f  (get new key))))))
 
+(defwatch :direction
+  (fn [_]
+    (scroll-to-cmd)))
+
 (defwatch :auth
   (fn [text]
     (lf-set "auth" text)))
 
-(defwatch :loading
-  (fn [_]
-    (scroll-down)))
-
-(defwatch :events
-  (fn [_]
-    (scroll-down)))
+(defwatch :history
+  (fn [history]
+    (lf-set "history" (clj->js (take-last 1024 history)))))
 
 (defwatch :offset
   (fn [val]
-    (when (not= 0 val)
-      (let [n (mod (dec val) (count (:history @state)))]
-        (swap! state assoc :search-text (nth (:history @state) n))))))
+    (if (= 0 val)
+      (swap! state assoc :cmd-text "")
+      (let [n (dec val)]
+        (swap! state assoc :cmd-text (nth (reverse (:history @state)) n))))))
 
-(defwatch :search-focus
+(defwatch :cmd-focus
   (fn [val]
     (when val
-      (focus (first (js/document.querySelectorAll "#search"))))))
+      (focus (first (js/document.querySelectorAll "#cmd"))))))
 
 (defn on-navigate [component data]
   (swap! state merge {:page component :parts (href-parts)}))
@@ -264,75 +295,71 @@
           params (flatten params)
           params (apply hash-map params)]
       (when-let [cmd (get params "cmd")]
-        (swap! state assoc :search-text (js/decodeURIComponent cmd))
-        (submit-command))
+        (swap! state assoc :cmd-text (js/decodeURIComponent cmd))
+        (submit-cmd))
       nil)))
 
 (defn with-random-key [xs]
   (map #(with-meta % {:key (str (js/Math.random))}) xs))
 
-(defn component-home []
+(defn component-cmd []
   (if (auth?)
-    [:<>
-     (init-on-first-load)
-     (for [[i event] (map vector (range) (:events @state))]
-       ^{:key i} [card (assoc-in card-style [:style :white-space] :pre)
-                  [:<> (with-random-key (ansi/text->hiccup event))]])
-     (if (:loading @state)
-       [card card-style
-        [linear-progress {:style {:height "13px"}}] ]
-       [text-field {:label "aws-rce"
-                    :id "search"
-                    :autoComplete "off"
-                    :spellCheck false
-                    :multiline true
-                    :fullWidth true
-                    :autoFocus true
-                    :focused (:search-focus @state)
-                    :value (:search-text @state)
-                    :on-focus #(swap! state assoc :search-focus true)
-                    :on-blur #(swap! state assoc :search-focus false)
-                    :on-change #(swap! state assoc :search-text (target-value %))
-                    :style {:width "98%"
-                            :margin "1%"}}])]
+    (let [_ (init-on-first-load)
+          order (if (:direction @state) reverse identity)
+          events (for [[i event] (map vector (range) (order (:events @state)))]
+                   ^{:key i} [mui-card (assoc-in card-style [:style :white-space] :pre)
+                              [:<> (with-random-key (ansi/text->hiccup (s/join "\n" (order event))))]])
+          prompt (if (:loading @state)
+                   [mui-card (merge card-style {:id "cmd"})
+                    [mui-linear-progress {:style {:height "13px"}}] ]
+                   [mui-card (update-in card-style-flex [:style] merge {:padding 0})
+                    [mui-icon-button {:style {:margin-top "5px"
+                                              :margin-left "5px"}
+                                      :disable-ripple true
+                                      :on-click #(do (swap! state update-in [:direction] not))}
+                     [(adapt (if (:direction @state)
+                               octo/ArrowUpIcon
+                               octo/ArrowDownIcon))
+                      {:size :medium}]]
+                    [mui-text-field {:label "aws-rce"
+                                     :id "cmd"
+                                     :autoComplete "off"
+                                     :spellCheck false
+                                     :multiline true
+                                     :fullWidth true
+                                     :autoFocus true
+                                     :focused (:cmd-focus @state)
+                                     :value (:cmd-text @state)
+                                     :on-focus #(swap! state assoc :cmd-focus true)
+                                     :on-blur #(swap! state assoc :cmd-focus false)
+                                     :on-change #(swap! state assoc :cmd-text (target-value %))
+                                     :style {:background-color "rgb(240,240,240)"
+                                             :margin "5px"}}]])]
+      (vec (concat [:<>] (order [events prompt]))))
     [:form
-     [card card-style
-      [text-field {:label "paste auth here"
-                   :value (:auth @state)
-                   :type :password
-                   :on-change #(swap! state assoc :auth (target-value %))
-                   :style {:width "100%"}} ]]]))
-
-(defn component-not-found []
-  [:div
-   [:p "404"]])
-
-(defn component-main []
-  [container {:id "content" :style {:padding 0 :margin-top "10px"}}
-   [(:page @state)]])
+     [mui-card card-style
+      [mui-text-field {:label "paste auth here"
+                       :value (:auth @state)
+                       :type :password
+                       :on-change #(swap! state assoc :auth (target-value %))
+                       :style {:width "100%"}} ]]]))
 
 (defn component-root []
   [:<>
    [:style style]
-   [component-main]])
-
-(def router
-  [["/" component-home]
-   ["(.*)" component-not-found]])
-
-(defn start-router []
-  (bide/start! (bide/router router) {:default "/"
-                                     :on-navigate on-navigate
-                                     :html5? false}))
+   [mui-container {:id "content" :style {:padding 0 :margin-top "10px"}}
+    [component-cmd]]])
 
 (defn reagent-render []
   (reagent.dom/render [component-root] (js/document.getElementById "app")))
 
 (defn ^:dev/after-load main []
-  (go (start-router)
-      (document-listener "keydown" keydown-listener)
+  (go (document-listener "keydown" keydown-listener)
       (document-listener "mousedown" mousedown-listener)
       (<! (lf-set-backend))
       (when-let [auth (<! (lf-get "auth"))]
         (swap! state assoc :auth auth))
+      (:history @state)
+      (when-let [history (<! (lf-get "history"))]
+        (swap! state assoc :history (js->clj history)))
       (reagent-render)))

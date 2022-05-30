@@ -52,5 +52,5 @@ func authNew() {
 	if err != nil {
 		lib.Logger.Fatal("error: ", err)
 	}
-	fmt.Println("export AUTH=" + key)
+	fmt.Println(key)
 }
