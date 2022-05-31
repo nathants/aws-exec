@@ -10,7 +10,7 @@ adhoc execution in lambda with streaming logs, exitcode, and 15 minutes max dura
 
 ## how
 
-an http post to apigateway triggers an async lambda which runs a shell command via a subprocess, streaming logs and then exit code back to the caller.
+an http post to apigateway triggers an async lambda which runs a shell command, streaming logs and then exit code back to the caller.
 
 there are two ways to use it:
 
