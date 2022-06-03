@@ -40,3 +40,18 @@ lambda:
       - PROJECT_DOMAIN=${PROJECT_DOMAIN}
       - PROJECT_URL=${PROJECT_URL}
       - PROJECT_BUCKET=${PROJECT_BUCKET}
+
+## vpc, instance profile, and keypair are only needed for: bin/relay.sh
+vpc:
+  relay:
+    security-group:
+      relay:
+        rule:
+          - tcp:22:0.0.0.0/0
+instance-profile:
+  relay:
+    allow:
+      - lambda:UpdateFunctionCode *
+keypair:
+  relay:
+    pubkey-content: ${PUBKEY_CONTENT}
