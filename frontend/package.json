@@ -3,7 +3,7 @@
   "version": "0.0.1",
   "private": true,
   "devDependencies": {
-    "shadow-cljs": "2.19.0"
+    "shadow-cljs": "2.19.1"
   },
   "dependencies": {
     "@emotion/react": "11.9.0",
