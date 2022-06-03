@@ -177,7 +177,7 @@
 (defn scroll-to-cmd []
   (go (let [start (js/Date.now)]
         (loop []
-          (if-let [el (js/document.getElementById "cmd")]
+          (let [el (js/document.getElementById "cmd")]
             (.scrollIntoView el #js {"behavior" "smooth"
                                      "block" "center"
                                      "inline" "center"})
@@ -309,18 +309,23 @@
           events (for [[i event] (map vector (range) (order (:events @state)))]
                    ^{:key i} [mui-card (assoc-in card-style [:style :white-space] :pre)
                               [:<> (with-random-key (ansi/text->hiccup (s/join "\n" (order event))))]])
+          direction-toggle [mui-icon-button {:style {:margin-top "5px"
+                                                     :margin-left "5px"}
+                                             :disable-ripple true
+                                             :on-click #(do (swap! state update-in [:direction] not))}
+                            [(adapt (if (:direction @state)
+                                      octo/ArrowUpIcon
+                                      octo/ArrowDownIcon))
+                             {:size :medium}]]
           prompt (if (:loading @state)
-                   [mui-card (merge card-style {:id "cmd"})
-                    [mui-linear-progress {:style {:height "13px"}}] ]
+                   [mui-card (-> card-style-flex (merge {:id "cmd"}) (update-in [:style] merge {:padding 0}))
+                    direction-toggle
+                    [mui-linear-progress {:style {:width "100%" :margin-right "20px"
+                                                  :height "21px"
+                                                  :margin-top "20px"
+                                                  :margin-bottom "20px"}}] ]
                    [mui-card (update-in card-style-flex [:style] merge {:padding 0})
-                    [mui-icon-button {:style {:margin-top "5px"
-                                              :margin-left "5px"}
-                                      :disable-ripple true
-                                      :on-click #(do (swap! state update-in [:direction] not))}
-                     [(adapt (if (:direction @state)
-                               octo/ArrowUpIcon
-                               octo/ArrowDownIcon))
-                      {:size :medium}]]
+                    direction-toggle
                     [mui-text-field {:label "aws-rce"
                                      :id "cmd"
                                      :autoComplete "off"
