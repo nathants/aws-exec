@@ -30,6 +30,8 @@ there are two ways to use it:
 - cli
 - web
 
+the provided [infrastructure set](https://github.com/nathants/aws-rce/blob/master/infra.yaml) is ready-to-deploy with [libaws](https://github.com/nathants/libaws).
+
 ## web demo
 
 ![](https://github.com/nathants/aws-rce/raw/master/gif/web.gif)
@@ -46,8 +48,11 @@ export PATH=$PATH:$(go env GOPATH)/bin
 
 cp env.sh.template env.sh # update values
 bash bin/check.sh         # lint
-bash bin/ensure.sh        # ensure aws infra and deploy prod release
-bash bin/dev.sh           # rapidly iterate by updating lambda zip
+bash bin/preview.sh       # preview changes to aws infra
+bash bin/ensure.sh        # ensure aws infra
+bash bin/dev.sh           # iterate on backend and frontend
+bash bin/logs.sh          # tail the logs
+bash bin/delete.sh        # delete aws infra
 bash bin/cli.sh -h        # interact with the service via the cli
 ```
 
