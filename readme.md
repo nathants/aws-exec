@@ -23,7 +23,7 @@ the caller:
 - returns the exit object.
 
 the caller can either:
-- let aws-rce manage the objects in it's own s3 bucket.
+- let aws-rce manage the objects in its own s3 bucket.
 - provide 3 presigned s3 urls for aws-rce to push to.
 
 there are two ways to use it:
@@ -39,6 +39,22 @@ the provided [infrastructure set](https://github.com/nathants/aws-rce/blob/maste
 ## cli demo
 
 ![](https://github.com/nathants/aws-rce/raw/master/gif/cli.gif)
+
+## dependencies
+
+use the included [Dockerfile](./Dockerfile) or install the following dependencies:
+- npm
+- jdk
+- go
+- bash
+- [entr](https://formulae.brew.sh/formula/entr)
+- [libaws](https://github.com/nathants/libaws)
+
+## aws prerequisites
+
+- aws [route53](https://console.aws.amazon.com/route53/v2/hostedzones) has the domain or its parent from env.sh
+
+- aws [acm](https://us-west-2.console.aws.amazon.com/acm/home) has a wildcard cert for the domain or its parent from env.sh
 
 ## deploy
 

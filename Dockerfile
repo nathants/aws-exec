@@ -3,13 +3,14 @@ FROM archlinux:latest
 RUN pacman -Syu --noconfirm
 
 RUN pacman -Sy --noconfirm \
-    git \
+    entr \
     gcc \
+    git \
     go \
-    npm \
     jdk-openjdk \
-    zip \
-    which
+    npm \
+    which \
+    zip
 
 RUN go install github.com/nathants/libaws@latest && \
     mv -fv ~/go/bin/* /usr/local/bin
