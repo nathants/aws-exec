@@ -10,12 +10,24 @@ adhoc execution in lambda with streaming logs, exitcode, and 15 minutes max dura
 
 ## how
 
-a http post to apigateway triggers an async lambda which runs a shell command, streaming logs and then exit code back to the caller.
+a http post to apigateway triggers an async lambda which runs a shell command and stores the result in s3.
+
+each invocation creates 3 objects in s3:
+- log: all stdout and stderr of the command, updated in its entirety every 3 seconds.
+- exit: the exit code of the command, written once.
+- size: the size in bytes of the log after the final update, written once, written last.
+
+the caller:
+- polls the log object with increasing range-start.
+- stops when the size object exists and range-start equals size.
+- returns the exit object.
+
+the caller can either:
+- let aws-rce manage the objects in it's own s3 bucket.
+- provide 3 presigned s3 urls for aws-rce to push to.
 
 there are two ways to use it:
-
 - cli
-
 - web
 
 ## web demo
