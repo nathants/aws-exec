@@ -83,8 +83,9 @@
    {:username ""
     :password ""
     :history []
-    :direction true
     :offset 0
+    :last-distance-from-bottom 0
+    :tail true
     :cmd-focus false
     :key-listener false
     :mouse-listener false
@@ -118,6 +119,20 @@
 
 (defn mousedown-listener [e]
   nil)
+
+(defn scroll-listener [e]
+  (let [distance-from-bottom (- (or (.-scrollTop js/document.documentElement)
+                                    (.-scrollTop js/document.body))
+                                (- (or (.-scrollHeight js/document.documentElement)
+                                       (.-scrollHeight js/document.body))
+                                   (or (.-clientHeight js/document.documentElement)
+                                       (.-clientHeight js/document.body))))
+        scrolling-up (> (:last-distance-from-bottom @state) distance-from-bottom)]
+    (swap! state assoc :last-distance-from-bottom distance-from-bottom)
+    (if scrolling-up
+      (swap! state assoc :tail false)
+      (if (< distance-from-bottom 50)
+        (swap! state assoc :tail true)))))
 
 (defn navigate-to [page]
   (let [a (js/document.createElement "a")]
@@ -175,18 +190,14 @@
   (.-length (.encode (js/TextEncoder.) s)))
 
 (defn scroll-to-cmd []
-  (go (let [start (js/Date.now)]
-        (loop []
-          (let [el (js/document.getElementById "cmd")]
-            (.scrollIntoView el #js {"behavior" "smooth"
-                                     "block" "center"
-                                     "inline" "center"})
-            (when (< (- (js/Date.now) start) 5000)
-              (do (<! (a/timeout 20))
-                  (recur))))))))
+  (let [el (js/document.getElementById "cmd")]
+    (.scrollIntoView el #js {"behavior" "smooth"
+                             "block" "center"
+                             "inline" "center"})))
 
 (defn submit-cmd []
   (let [cmd (:cmd-text @state)]
+    (swap! state assoc :tail true)
     (cond
       ;;
       (= "history clear" cmd)
@@ -196,15 +207,15 @@
       ;;
       (= "history" cmd)
       (do (swap! state update-in [:history] conj cmd)
-          (swap! state update-in [:events] #(vec (take-last max-events (conj % (take-last 128 (mapv (fn [[i l]]
-                                                                                                      (str (inc i) ". " l))
-                                                                                                    (map vector (range) (:history @state))))))))
+          (swap! state update-in [:events] #(vec (take-last max-events (conj % (s/join "\n" (take-last 128 (mapv (fn [[i l]]
+                                                                                                                   (str (inc i) ". " l))
+                                                                                                                 (map vector (range) (:history @state)))))))))
           (swap! state assoc :cmd-text "")
           (swap! state assoc :offset 0))
       ;;
       :else
       (go (swap! state update-in [:history] conj cmd)
-          (swap! state update-in [:events] #(vec (take-last max-events (conj % [(str ">> " cmd)]))))
+          (swap! state update-in [:events] #(vec (take-last max-events (conj % (str ">> " cmd)))))
           (swap! state assoc :loading true)
           (swap! state assoc :cmd-focus false)
           (swap! state assoc :cmd-text "")
@@ -216,10 +227,10 @@
                 (when (= 200 (:status resp))
                   (if-let [exit (:exit (:body resp))]
                     (swap! state #(-> %
-                                    (update-in [:events] conj [(str "exit: " exit)])
+                                    (update-in [:events] conj (str "exit: " exit))
                                     (assoc :loading false)))
                     (if-let [data (<! (s3-log-get (:url (:body resp)) range-start))]
-                      (do (swap! state update-in [:events] #(vec (take-last max-events (conj % (s/split-lines data)))))
+                      (do (swap! state update-in [:events] #(vec (take-last max-events (conj % data))))
                           (<! (a/timeout 0))
                           (recur (+ range-start (byte-size data))))
                       (do (<! (a/timeout 3000))
@@ -251,10 +262,6 @@
                          (when (not= (get old key)
                                      (get new key))
                            (f  (get new key))))))
-
-(defwatch :direction
-  (fn [_]
-    (scroll-to-cmd)))
 
 (defwatch :auth
   (fn [text]
@@ -302,32 +309,37 @@
 (defn with-random-key [xs]
   (map #(with-meta % {:key (str (js/Math.random))}) xs))
 
+(defn component-events []
+  (reagent/create-class
+   {:component-did-mount
+    (fn [_]
+      (when (:tail @state)
+        (scroll-to-cmd)))
+    :component-did-update
+    (fn [_ _]
+      (when (:tail @state)
+        (scroll-to-cmd)))
+    :reagent-render
+    (fn []
+      [:<>
+       (for [[i event] (map vector (range) (:events @state))]
+         ^{:key i} [mui-card (assoc-in card-style [:style :white-space] :pre)
+                    [:<> (with-random-key (ansi/text->hiccup event))]])])}))
+
 (defn component-cmd []
   (if (auth?)
     (let [_ (init-on-first-load)
-          order (if (:direction @state) reverse identity)
-          events (for [[i event] (map vector (range) (order (:events @state)))]
-                   ^{:key i} [mui-card (assoc-in card-style [:style :white-space] :pre)
-                              [:<> (with-random-key (ansi/text->hiccup (s/join "\n" (order event))))]])
-          direction-toggle [mui-icon-button {:style {:margin-top "5px"
-                                                     :margin-left "5px"}
-                                             :disable-ripple true
-                                             :on-click #(do (swap! state update-in [:direction] not))}
-                            [(adapt (if (:direction @state)
-                                      octo/ArrowUpIcon
-                                      octo/ArrowDownIcon))
-                             {:size :medium}]]
-          prompt (if (:loading @state)
-                   [mui-card (-> card-style-flex (merge {:id "cmd"}) (update-in [:style] merge {:padding 0}))
-                    direction-toggle
-                    [mui-linear-progress {:style {:width "100%" :margin-right "20px"
+          prompt [mui-card (-> card-style-flex
+                             (merge {:id "cmd"})
+                             (update-in [:style] merge {:padding 0}))
+                  (if (:loading @state)
+                    [mui-linear-progress {:style {:width "100%"
                                                   :height "21px"
+                                                  :margin-left "10px"
+                                                  :margin-right "10px"
                                                   :margin-top "20px"
-                                                  :margin-bottom "20px"}}] ]
-                   [mui-card (update-in card-style-flex [:style] merge {:padding 0})
-                    direction-toggle
+                                                  :margin-bottom "20px"}}]
                     [mui-text-field {:label "aws-rce"
-                                     :id "cmd"
                                      :autoComplete "off"
                                      :spellCheck false
                                      :multiline true
@@ -339,8 +351,10 @@
                                      :on-blur #(swap! state assoc :cmd-focus false)
                                      :on-change #(swap! state assoc :cmd-text (target-value %))
                                      :style {:background-color "rgb(240,240,240)"
-                                             :margin "5px"}}]])]
-      (vec (concat [:<>] (order [events prompt]))))
+                                             :margin "5px"}}])]]
+      [:<>
+       [component-events]
+       prompt])
     [:form
      [mui-card card-style
       [mui-text-field {:label "paste auth here"
@@ -361,6 +375,7 @@
 (defn ^:dev/after-load main []
   (go (document-listener "keydown" keydown-listener)
       (document-listener "mousedown" mousedown-listener)
+      (document-listener "scroll" scroll-listener)
       (<! (lf-set-backend))
       (when-let [auth (<! (lf-get "auth"))]
         (swap! state assoc :auth auth))
