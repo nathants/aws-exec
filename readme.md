@@ -10,7 +10,7 @@ adhoc execution in lambda with streaming logs, exitcode, and 15 minutes max dura
 
 ## how
 
-an http post to apigateway triggers an async lambda which runs a shell command, streaming logs and then exit code back to the caller.
+a http post to apigateway triggers an async lambda which runs a shell command, streaming logs and then exit code back to the caller.
 
 there are two ways to use it:
 
@@ -20,11 +20,11 @@ there are two ways to use it:
 
 ## web demo
 
-![](https://github.com/nathants/aws-rce/raw/master/web.gif)
+![](https://github.com/nathants/aws-rce/raw/master/gif/web.gif)
 
 ## cli demo
 
-![](https://github.com/nathants/aws-rce/raw/master/cli.gif)
+![](https://github.com/nathants/aws-rce/raw/master/gif/cli.gif)
 
 ## deploy
 
