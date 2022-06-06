@@ -1,4 +1,4 @@
-package awsrce
+package awsexec
 
 import (
 	"context"
@@ -6,7 +6,7 @@ import (
 	"os"
 
 	"github.com/alexflint/go-arg"
-	"github.com/nathants/aws-rce/rce"
+	awsexec "github.com/nathants/aws-exec/exec"
 	"github.com/nathants/libaws/lib"
 )
 
@@ -34,7 +34,7 @@ func exec() {
 	callback := func(logs string) {
 		fmt.Print(logs)
 	}
-	exitCode, err := rce.Exec(ctx, url, auth, args.Argv, callback, nil)
+	exitCode, err := awsexec.Exec(ctx, url, auth, args.Argv, callback, nil)
 	if err != nil {
 		lib.Logger.Fatal("error: ", err)
 	}

@@ -14,7 +14,7 @@ import (
 	"mime"
 	"net/http"
 	"os"
-	"os/exec"
+	osexec "os/exec"
 	"path/filepath"
 	"runtime/debug"
 	"strconv"
@@ -32,7 +32,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/dustin/go-humanize"
 	uuid "github.com/gofrs/uuid"
-	"github.com/nathants/aws-rce/rce"
+	"github.com/nathants/aws-exec/exec"
 	"github.com/nathants/libaws/lib"
 )
 
@@ -104,8 +104,8 @@ func notfound() events.APIGatewayProxyResponse {
 }
 
 func checkAuth(ctx context.Context, auth string) (string, bool) {
-	key, err := dynamodbattribute.MarshalMap(rce.RecordKey{
-		ID: fmt.Sprintf("auth.%s", rce.Blake2b32(auth)),
+	key, err := dynamodbattribute.MarshalMap(exec.RecordKey{
+		ID: fmt.Sprintf("auth.%s", exec.Blake2b32(auth)),
 	})
 	if err != nil {
 		panic(err)
@@ -127,7 +127,7 @@ func checkAuth(ctx context.Context, auth string) (string, bool) {
 	if out.Item == nil {
 		return "", false
 	}
-	val := rce.Record{}
+	val := exec.Record{}
 	err = dynamodbattribute.UnmarshalMap(out.Item, &val)
 	if err != nil {
 		panic(err)
@@ -140,7 +140,7 @@ func checkAuth(ctx context.Context, auth string) (string, bool) {
 
 func httpExecGet(ctx context.Context, event *events.APIGatewayProxyRequest, res chan<- events.APIGatewayProxyResponse, authName string) {
 	bucket := os.Getenv("PROJECT_BUCKET")
-	getRequest := rce.ExecGetRequest{
+	getRequest := exec.GetRequest{
 		Uid:        event.QueryStringParameters["uid"],
 		RangeStart: atoi(event.QueryStringParameters["range-start"]),
 	}
@@ -184,7 +184,7 @@ func httpExecGet(ctx context.Context, event *events.APIGatewayProxyRequest, res 
 				panic(err)
 			}
 			exit := atoi(string(exitData))
-			respData, err := json.Marshal(rce.ExecGetResponse{
+			respData, err := json.Marshal(exec.GetResponse{
 				Exit: aws.Int(exit),
 			})
 			if err != nil {
@@ -209,7 +209,7 @@ func httpExecGet(ctx context.Context, event *events.APIGatewayProxyRequest, res 
 	if err != nil {
 		panic(err)
 	}
-	respData, err := json.Marshal(rce.ExecGetResponse{
+	respData, err := json.Marshal(exec.GetResponse{
 		Url: url,
 	})
 	if err != nil {
@@ -223,7 +223,7 @@ func httpExecGet(ctx context.Context, event *events.APIGatewayProxyRequest, res 
 }
 
 func httpExecPost(ctx context.Context, event *events.APIGatewayProxyRequest, res chan<- events.APIGatewayProxyResponse, authName string) {
-	postReqest := rce.ExecPostRequest{}
+	postReqest := exec.PostRequest{}
 	if event.IsBase64Encoded {
 		data, err := base64.StdEncoding.DecodeString(event.Body)
 		if err != nil {
@@ -236,8 +236,8 @@ func httpExecPost(ctx context.Context, event *events.APIGatewayProxyRequest, res
 		panic(fmt.Sprint(event.Body, err))
 	}
 	uid := fmt.Sprintf("%d.%s", time.Now().Unix(), uuid.Must(uuid.NewV4()).String())
-	data, err := json.Marshal(rce.ExecAsyncEvent{
-		EventType: rce.EventExec,
+	data, err := json.Marshal(exec.AsyncEvent{
+		EventType: exec.EventExec,
 		Uid:       uid,
 		AuthName:  authName,
 		Argv:      postReqest.Argv,
@@ -269,7 +269,7 @@ func httpExecPost(ctx context.Context, event *events.APIGatewayProxyRequest, res
 	if err != nil {
 		panic(err)
 	}
-	data, err = json.Marshal(rce.ExecPostResponse{
+	data, err = json.Marshal(exec.PostResponse{
 		Uid: uid,
 	})
 	if err != nil {
@@ -339,7 +339,7 @@ func handleApiEvent(ctx context.Context, event *events.APIGatewayProxyRequest, r
 			}
 			return
 		}
-		auth, ok := rce.CaseInsensitiveGet(event.Headers, "auth")
+		auth, ok := exec.CaseInsensitiveGet(event.Headers, "auth")
 		if !ok {
 			res <- unauthorized()
 			return
@@ -393,10 +393,10 @@ func logRecover(r interface{}, res chan<- events.APIGatewayProxyResponse) {
 	}
 }
 
-func handleAsyncEvent(ctx context.Context, event *rce.ExecAsyncEvent, res chan<- events.APIGatewayProxyResponse) {
+func handleAsyncEvent(ctx context.Context, event *exec.AsyncEvent, res chan<- events.APIGatewayProxyResponse) {
 	bucket := os.Getenv("PROJECT_BUCKET")
 	start := time.Now()
-	cmd := exec.CommandContext(ctx, event.Argv[0], event.Argv[1:]...)
+	cmd := osexec.CommandContext(ctx, event.Argv[0], event.Argv[1:]...)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		panic(err)
@@ -555,7 +555,7 @@ func handleAsyncEvent(ctx context.Context, event *rce.ExecAsyncEvent, res chan<-
 				} else if *line != "" {
 					logLock.Lock()
 					val := *line + "\n"
-					if logFileSize >= rce.MaxLogBytes {
+					if logFileSize >= exec.MaxLogBytes {
 						if logToDisk {
 							_, err = logFileWriter.WriteString("[log truncated]\n")
 							if err != nil {
@@ -572,10 +572,10 @@ func handleAsyncEvent(ctx context.Context, event *rce.ExecAsyncEvent, res chan<-
 					}
 					logLock.Unlock()
 				}
-			case <-time.After(rce.LogShipInterval):
+			case <-time.After(exec.LogShipInterval):
 				// check if logs need to be shipped even when no new output
 			}
-			if time.Since(lastShippedTime) > rce.LogShipInterval {
+			if time.Since(lastShippedTime) > exec.LogShipInterval {
 				shipLogs()
 			}
 		}
@@ -677,8 +677,8 @@ func handle(ctx context.Context, event map[string]interface{}, res chan<- events
 			logRecover(r, res)
 		}
 	}()
-	if event["event-type"] == rce.EventExec {
-		asyncEvent := &rce.ExecAsyncEvent{}
+	if event["event-type"] == exec.EventExec {
+		asyncEvent := &exec.AsyncEvent{}
 		data, err := json.Marshal(event)
 		if err != nil {
 			panic(err)

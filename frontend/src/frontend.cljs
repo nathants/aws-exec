@@ -339,7 +339,7 @@
                                                   :margin-right "10px"
                                                   :margin-top "20px"
                                                   :margin-bottom "20px"}}]
-                    [mui-text-field {:label "aws-rce"
+                    [mui-text-field {:label "aws-exec"
                                      :autoComplete "off"
                                      :spellCheck false
                                      :multiline true

@@ -1,4 +1,4 @@
-module github.com/nathants/aws-rce
+module github.com/nathants/aws-exec
 
 go 1.17
 

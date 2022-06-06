@@ -1,4 +1,4 @@
-package awsrce
+package awsexec
 
 import (
 	"context"
@@ -10,7 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbattribute"
-	"github.com/nathants/aws-rce/rce"
+	"github.com/nathants/aws-exec/exec"
 	"github.com/nathants/libaws/lib"
 )
 
@@ -35,7 +35,7 @@ func authRm() {
 	if !strings.HasPrefix(id, "auth.") {
 		id = fmt.Sprintf("auth.%s", id)
 	}
-	key, err := dynamodbattribute.MarshalMap(rce.RecordKey{
+	key, err := dynamodbattribute.MarshalMap(exec.RecordKey{
 		ID: id,
 	})
 	if err != nil {

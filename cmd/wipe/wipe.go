@@ -1,4 +1,4 @@
-package awsrce
+package awsexec
 
 import "github.com/nathants/libaws/lib"
 

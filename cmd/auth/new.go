@@ -1,4 +1,4 @@
-package awsrce
+package awsexec
 
 import (
 	"context"
@@ -9,7 +9,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbattribute"
-	"github.com/nathants/aws-rce/rce"
+	"github.com/nathants/aws-exec/exec"
 	"github.com/nathants/libaws/lib"
 )
 
@@ -30,12 +30,12 @@ func authNew() {
 	var args authNewArgs
 	arg.MustParse(&args)
 	table := os.Getenv("PROJECT_NAME")
-	key := rce.RandKey()
-	item, err := dynamodbattribute.MarshalMap(rce.Record{
-		RecordKey: rce.RecordKey{
-			ID: fmt.Sprintf("auth.%s", rce.Blake2b32(key)),
+	key := exec.RandKey()
+	item, err := dynamodbattribute.MarshalMap(exec.Record{
+		RecordKey: exec.RecordKey{
+			ID: fmt.Sprintf("auth.%s", exec.Blake2b32(key)),
 		},
-		RecordData: rce.RecordData{
+		RecordData: exec.RecordData{
 			Value: args.Name,
 		},
 	})

@@ -1,4 +1,4 @@
-package rce
+package exec
 
 import (
 	"bytes"
@@ -22,12 +22,12 @@ const (
 	LogShipInterval = 3 * time.Second
 )
 
-type ExecGetRequest struct {
+type GetRequest struct {
 	Uid        string `json:"uid"`
 	RangeStart int    `json:"range-start"`
 }
 
-type ExecGetResponse struct {
+type GetResponse struct {
 	Exit *int   `json:"exit"`
 	Url  string `json:"url"`
 }
@@ -38,16 +38,16 @@ type PushUrls struct {
 	Exit string `json:"exit"`
 }
 
-type ExecPostRequest struct {
+type PostRequest struct {
 	Argv     []string  `json:"argv"`
 	PushUrls *PushUrls `json:"push-urls"`
 }
 
-type ExecPostResponse struct {
+type PostResponse struct {
 	Uid string `json:"uid"`
 }
 
-type ExecAsyncEvent struct {
+type AsyncEvent struct {
 	EventType string    `json:"event-type"`
 	AuthName  string    `json:"auth-name"`
 	Uid       string    `json:"uid"`
@@ -91,7 +91,7 @@ func CaseInsensitiveGet(m map[string]string, k string) (string, bool) {
 	return "", false
 }
 
-// if pushUrls are not provided, data will be persisted by aws-rce and
+// if pushUrls are not provided, data will be persisted by aws-exec and
 // this function will poll until process completion, pulling log data
 // as it is available and invoking logDataCallback, then returning the
 // exit code.
@@ -105,10 +105,10 @@ func CaseInsensitiveGet(m map[string]string, k string) (string, bool) {
 // contain the size of the final log push.
 //
 func Exec(ctx context.Context, url, auth string, argv []string, logDataCallback func(logs string), pushUrls *PushUrls) (int, error) {
-	postResponse := ExecPostResponse{}
+	postResponse := PostResponse{}
 	err := lib.RetryAttempts(ctx, 7, func() error {
 		client := http.Client{}
-		data, err := json.Marshal(ExecPostRequest{
+		data, err := json.Marshal(PostRequest{
 			Argv:     argv,
 			PushUrls: pushUrls,
 		})
@@ -150,7 +150,7 @@ func Exec(ctx context.Context, url, auth string, argv []string, logDataCallback 
 	}
 	rangeStart := 0
 	for {
-		getResp := ExecGetResponse{}
+		getResp := GetResponse{}
 		err := lib.RetryAttempts(ctx, 7, func() error {
 			client := http.Client{}
 			req, err := http.NewRequest(http.MethodGet, url+fmt.Sprintf("/api/exec?uid=%s&range-start=%d", postResponse.Uid, rangeStart), nil)

@@ -6,10 +6,10 @@ import (
 	"sort"
 	"strings"
 
-	_ "github.com/nathants/aws-rce/cmd/wipe"
+	_ "github.com/nathants/aws-exec/cmd/wipe"
 
-	_ "github.com/nathants/aws-rce/cmd/auth"
-	_ "github.com/nathants/aws-rce/cmd/exec"
+	_ "github.com/nathants/aws-exec/cmd/auth"
+	_ "github.com/nathants/aws-exec/cmd/exec"
 
 	"github.com/nathants/libaws/lib"
 )

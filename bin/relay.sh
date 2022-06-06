@@ -11,7 +11,7 @@ set -eou pipefail
 #
 # usage:
 #
-#   bash bin/relay.sh "bash -c 'cd aws-rce && ZIP_COMPRESSION=0 bash bin/quick.sh'"
+#   bash bin/relay.sh "bash -c 'cd aws-exec && ZIP_COMPRESSION=0 bash bin/quick.sh'"
 #
 
 source env.sh
@@ -67,13 +67,13 @@ libaws ec2-ssh $name -c '
 
 ## copy all source to to relay, after this we only copy what changes
 export RSYNC_OPTIONS="--exclude .shadow-cljs --exclude node_modules --exclude .backups --exclude *.~undo-tree~ --exclude .clj-kondo --exclude frontend"
-libaws ec2-rsync $(pwd)/ :aws-rce/ $name
+libaws ec2-rsync $(pwd)/ :aws-exec/ $name
 
 cd ..
 
 (
     ## watch these files for changes
-    find aws-rce -type f | grep -e '\.go$' -e '\.mod$' -e '\.sum$' -e '\.yaml$' -e '\.sh$' | grep -v '/frontend/'
+    find aws-exec -type f | grep -e '\.go$' -e '\.mod$' -e '\.sum$' -e '\.yaml$' -e '\.sh$' | grep -v '/frontend/'
 
 ) | (
 

@@ -1,13 +1,12 @@
-# aws-rce 
-*NOTE: This is not a security RCE!
+# aws-exec
 
 ## why
 
-sometimes remote code execution is exactly what's needed, like for continuous integration.
+sometimes adhoc shell execution is exactly what's needed, like for continuous integration.
 
 ## what
 
-adhoc execution in lambda with streaming logs, exitcode, and 15 minutes max duration.
+adhoc shell execution in lambda with streaming logs, exitcode, and 15 minutes max duration.
 
 ## how
 
@@ -24,22 +23,22 @@ the caller:
 - returns the exit object.
 
 the caller can either:
-- let aws-rce manage the objects in its own s3 bucket.
-- provide 3 presigned s3 urls for aws-rce to push to.
+- let aws-exec manage the objects in its own s3 bucket.
+- provide 3 presigned s3 urls for aws-exec to push to.
 
 there are two ways to use it:
 - cli
 - web
 
-the provided [infrastructure set](https://github.com/nathants/aws-rce/blob/master/infra.yaml) is ready-to-deploy with [libaws](https://github.com/nathants/libaws).
+the provided [infrastructure set](https://github.com/nathants/aws-exec/blob/master/infra.yaml) is ready-to-deploy with [libaws](https://github.com/nathants/libaws).
 
 ## web demo
 
-![](https://github.com/nathants/aws-rce/raw/master/gif/web.gif)
+![](https://github.com/nathants/aws-exec/raw/master/gif/web.gif)
 
 ## cli demo
 
-![](https://github.com/nathants/aws-rce/raw/master/gif/cli.gif)
+![](https://github.com/nathants/aws-exec/raw/master/gif/cli.gif)
 
 ## dependencies
 
@@ -77,13 +76,13 @@ bash bin/cli.sh -h        # interact with the service via the cli
 
 ```bash
 cp env.sh.template env.sh # update values
-docker build -t aws-rce:latest .
+docker build -t aws-exec:latest .
 docker run -it --rm \
     -v $(pwd):/code \
     -e AWS_DEFAULT_REGION \
     -e AWS_ACCESS_KEY_ID \
     -e AWS_SECRET_ACCESS_KEY \
-    aws-rce:latest \
+    aws-exec:latest \
     bash -c '
         cd /code
         bash bin/ensure.sh
@@ -99,10 +98,10 @@ bash bin/cli.sh auth-new test-user
 ## install and use cli
 
 ```bash
-go install github.com/nathants/aws-rce@latest
+go install github.com/nathants/aws-exec@latest
 export PATH=$PATH:$(go env GOPATH)/bin
 
 export AUTH=$AUTH
 export PROJECT_DOMAIN=$DOMAIN
-aws-rce exec -- whoami
+aws-exec exec -- whoami
 ```

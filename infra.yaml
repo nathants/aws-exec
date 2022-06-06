@@ -1,4 +1,4 @@
-name: aws-rce
+name: aws-exec
 
 dynamodb:
   ${PROJECT_NAME}:

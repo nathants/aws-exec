@@ -1,4 +1,4 @@
-package awsrce
+package awsexec
 
 import (
 	"context"
@@ -10,7 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbattribute"
-	"github.com/nathants/aws-rce/rce"
+	"github.com/nathants/aws-exec/exec"
 	"github.com/nathants/libaws/lib"
 )
 
@@ -45,7 +45,7 @@ func authLs() {
 			lib.Logger.Fatal("error: ", err)
 		}
 		for _, item := range out.Items {
-			val := rce.Record{}
+			val := exec.Record{}
 			err := dynamodbattribute.UnmarshalMap(item, &val)
 			if err != nil {
 				lib.Logger.Fatal("error: ", err)
