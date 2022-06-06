@@ -1,4 +1,5 @@
-# aws-rce
+# aws-rce 
+*NOTE: This is not a security RCE!
 
 ## why
 
