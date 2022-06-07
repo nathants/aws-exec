@@ -9,9 +9,12 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/nathants/libaws/lib"
 	"golang.org/x/crypto/blake2b"
 )
@@ -224,5 +227,88 @@ func Exec(ctx context.Context, url, auth string, argv []string, logDataCallback 
 			logDataCallback(string(data))
 			rangeStart += len(data)
 		}
+	}
+}
+
+// if pushUrls were provided to Exec(), you can use this function to tail the output and return the exit code.
+//
+// the values in pushUrls should now be s3 keys, not presigned urls.
+//
+func Tail(ctx context.Context, logDataCallback func(logs string), bucket string, pushUrls *PushUrls) (int, error) {
+	rangeStart := 0
+	for {
+		// once size is known and client has read size bytes, return exit
+		outSize, err := lib.S3Client().GetObjectWithContext(ctx, &s3.GetObjectInput{
+			Bucket: aws.String(bucket),
+			Key:    aws.String(pushUrls.Size),
+		})
+		if err == nil {
+			sizeData, err := io.ReadAll(outSize.Body)
+			if err != nil {
+				lib.Logger.Println("error:", err)
+				return 0, err
+			}
+			err = outSize.Body.Close()
+			if err != nil {
+				lib.Logger.Println("error:", err)
+				return 0, err
+			}
+			size, err := strconv.Atoi(string(sizeData))
+			if err != nil {
+				lib.Logger.Println("error:", err)
+			}
+			if rangeStart == size {
+				exitStr := ""
+				err := lib.Retry(ctx, func() error {
+					outExit, err := lib.S3Client().GetObjectWithContext(ctx, &s3.GetObjectInput{
+						Bucket: aws.String(bucket),
+						Key:    aws.String(pushUrls.Exit),
+					})
+					if err != nil {
+						return err
+					}
+					exitData, err := io.ReadAll(outExit.Body)
+					if err != nil {
+						return err
+					}
+					err = outExit.Body.Close()
+					if err != nil {
+						return err
+					}
+					exitStr = string(exitData)
+					return nil
+				})
+				if err != nil {
+					lib.Logger.Println("error:", err)
+					return 0, err
+				}
+				exit, err := strconv.Atoi(string(exitStr))
+				if err != nil {
+					lib.Logger.Println("error:", err)
+					return 0, err
+				}
+				return exit, nil
+			}
+		}
+		// otherwize process log data for range-start
+		var data []byte
+		err = lib.Retry(ctx, func() error {
+			out, err := lib.S3Client().GetObjectWithContext(ctx, &s3.GetObjectInput{
+				Bucket: aws.String(bucket),
+				Key:    aws.String(pushUrls.Log),
+				Range:  aws.String(fmt.Sprintf("bytes=%d-", rangeStart)),
+			})
+			if err != nil {
+				return err
+			}
+			data, err = io.ReadAll(out.Body)
+			return err
+		})
+		if err != nil {
+			lib.Logger.Println("error:", err)
+			return 0, err
+		}
+		logDataCallback(string(data))
+		rangeStart += len(data)
 	}
 }
