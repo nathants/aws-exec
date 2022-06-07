@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/nathants/libaws/lib"
 	"golang.org/x/crypto/blake2b"
@@ -234,7 +235,7 @@ func Exec(ctx context.Context, url, auth string, argv []string, logDataCallback 
 //
 // the values in pushUrls should now be s3 keys, not presigned urls.
 //
-func Tail(ctx context.Context, logDataCallback func(logs string), bucket string, pushUrls *PushUrls) (int, error) {
+func Tail(ctx context.Context, logDataCallback func(logs string), bucket string, pushUrls *PushUrls, logShipInterval time.Duration) (int, error) {
 	rangeStart := 0
 	for {
 		// once size is known and client has read size bytes, return exit
@@ -299,6 +300,11 @@ func Tail(ctx context.Context, logDataCallback func(logs string), bucket string,
 				Range:  aws.String(fmt.Sprintf("bytes=%d-", rangeStart)),
 			})
 			if err != nil {
+				aerr, ok := err.(awserr.Error)
+				if ok && aerr.Code() == "InvalidRange" {
+					time.Sleep(logShipInterval)
+					return nil
+				}
 				return err
 			}
 			data, err = io.ReadAll(out.Body)
