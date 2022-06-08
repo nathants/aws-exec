@@ -29,7 +29,7 @@ lambda:
     policy:
       - AWSLambdaBasicExecutionRole
     allow:
-      - dynamodb:* arn:aws:dynamodb:*:*:table/${PROJECT_NAME}
+      - dynamodb:GetItem arn:aws:dynamodb:*:*:table/${PROJECT_NAME}
       - s3:* arn:aws:s3:::${PROJECT_BUCKET}/*
       - lambda:InvokeFunction arn:aws:lambda:*:*:function:${PROJECT_NAME}
     include:
