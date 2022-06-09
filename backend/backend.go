@@ -552,7 +552,7 @@ func handleAsyncEvent(ctx context.Context, event *exec.AsyncEvent, res chan<- ev
 						logsDone <- nil
 						return
 					}
-				} else if *line != "" {
+				} else {
 					logLock.Lock()
 					val := *line + "\n"
 					if logFileSize >= exec.MaxLogBytes {
