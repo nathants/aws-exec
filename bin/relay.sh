@@ -66,7 +66,7 @@ libaws ec2-ssh $name -c '
 '
 
 ## copy all source to to relay, after this we only copy what changes
-export RSYNC_OPTIONS="--exclude .shadow-cljs --exclude node_modules --exclude .backups --exclude *.~undo-tree~ --exclude .clj-kondo --exclude frontend"
+export RSYNC_OPTIONS="--exclude frontend/public/js/ --exclude .shadow-cljs --exclude node_modules --exclude .backups --exclude *.~undo-tree~ --exclude .clj-kondo"
 libaws ec2-rsync $(pwd)/ :aws-exec/ $name
 
 cd ..
