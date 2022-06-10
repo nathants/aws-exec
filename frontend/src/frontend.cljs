@@ -131,7 +131,8 @@
     (swap! state assoc :last-distance-from-bottom distance-from-bottom)
     (if scrolling-up
       (swap! state assoc :tail false)
-      (if (< distance-from-bottom 50)
+      (if (and (:loading @state)
+               (< distance-from-bottom 50))
         (swap! state assoc :tail true)))))
 
 (defn navigate-to [page]
