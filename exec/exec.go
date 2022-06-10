@@ -314,9 +314,14 @@ func Tail(ctx context.Context, logDataCallback func(logs string), bucket string,
 			})
 			if err != nil {
 				aerr, ok := err.(awserr.Error)
-				if ok && aerr.Code() == "InvalidRange" {
-					time.Sleep(logShipInterval)
-					return nil
+				if ok {
+					if aerr.Code() == "InvalidRange" {
+						time.Sleep(logShipInterval)
+						return nil
+					}
+					if aerr.Code() == "NoSuchKey" {
+						return nil
+					}
 				}
 				return err
 			}
