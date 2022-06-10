@@ -238,25 +238,38 @@ func Exec(ctx context.Context, url, auth string, argv []string, logDataCallback 
 func Tail(ctx context.Context, logDataCallback func(logs string), bucket string, pushUrls *PushUrls, logShipInterval time.Duration) (int, error) {
 	rangeStart := 0
 	for {
+		select {
+		case <-ctx.Done():
+			err := fmt.Errorf("context done")
+			lib.Logger.Println("error:", err)
+			return 0, err
+		default:
+		}
 		// once size is known and client has read size bytes, return exit
-		outSize, err := lib.S3Client().GetObjectWithContext(ctx, &s3.GetObjectInput{
-			Bucket: aws.String(bucket),
-			Key:    aws.String(pushUrls.Size),
-		})
-		if err == nil {
-			sizeData, err := io.ReadAll(outSize.Body)
+		var sizeData []byte
+		_ = lib.Retry(ctx, func() error {
+			outSize, err := lib.S3Client().GetObjectWithContext(ctx, &s3.GetObjectInput{
+				Bucket: aws.String(bucket),
+				Key:    aws.String(pushUrls.Size),
+			})
 			if err != nil {
-				lib.Logger.Println("error:", err)
-				return 0, err
+				return nil // continue loop instead of retrying when size object not available
+			}
+			sizeData, err = io.ReadAll(outSize.Body)
+			if err != nil {
+				return err
 			}
 			err = outSize.Body.Close()
 			if err != nil {
-				lib.Logger.Println("error:", err)
-				return 0, err
+				return err
 			}
+			return nil
+		})
+		if len(sizeData) != 0 {
 			size, err := strconv.Atoi(string(sizeData))
 			if err != nil {
 				lib.Logger.Println("error:", err)
+				return 0, err
 			}
 			if rangeStart == size {
 				exitStr := ""
@@ -293,7 +306,7 @@ func Tail(ctx context.Context, logDataCallback func(logs string), bucket string,
 		}
 		// otherwize process log data for range-start
 		var data []byte
-		err = lib.Retry(ctx, func() error {
+		err := lib.Retry(ctx, func() error {
 			out, err := lib.S3Client().GetObjectWithContext(ctx, &s3.GetObjectInput{
 				Bucket: aws.String(bucket),
 				Key:    aws.String(pushUrls.Log),
@@ -308,7 +321,10 @@ func Tail(ctx context.Context, logDataCallback func(logs string), bucket string,
 				return err
 			}
 			data, err = io.ReadAll(out.Body)
-			return err
+			if err != nil {
+				return err
+			}
+			return nil
 		})
 		if err != nil {
 			lib.Logger.Println("error:", err)
