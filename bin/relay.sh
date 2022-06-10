@@ -23,7 +23,7 @@ ssh_opts="-o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no"
 ## spinup the instance if it doesn't already exist
 if ! libaws ec2-ls -s running $name &>/dev/null; then
     libaws ec2-new \
-           --ami alpine-3.16.0 \
+           --ami alpine \
            --key $name \
            --sg $name \
            --vpc $name \
