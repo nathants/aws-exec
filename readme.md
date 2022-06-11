@@ -43,7 +43,7 @@ the provided [infrastructure set](https://github.com/nathants/aws-exec/blob/mast
 
 asynchronous invocation means that there is a low, but minimum, execution time.
 
-to add synchronous command that is fast and returns all results immediately, add to [api/](https://github.com/nathants/aws-exec/tree/master/backend/backend.go#L353) instead of [cmd/](https://github.com/nathants/aws-exec/tree/master/cmd).
+to add a synchronous command that is fast and returns all results immediately, add to [api/](https://github.com/nathants/aws-exec/tree/master/backend/backend.go#L353) instead of [cmd/](https://github.com/nathants/aws-exec/tree/master/cmd).
 
 ## usage
 
