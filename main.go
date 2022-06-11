@@ -1,16 +1,20 @@
 package main
 
 import (
+	_ "github.com/nathants/aws-exec/cmd/wipe" // important that this is first, we re-use cli mechanism from libaws, and this clears the function list before we re-populate it
+
 	"fmt"
 	"os"
 	"sort"
 	"strings"
 
-	_ "github.com/nathants/aws-exec/cmd/wipe"
-
 	_ "github.com/nathants/aws-exec/cmd/auth"
 	_ "github.com/nathants/aws-exec/cmd/exec"
+	_ "github.com/nathants/aws-exec/cmd/listdir"
+	_ "github.com/nathants/aws-exec/cmd/rpc"
 
+	"github.com/aws/aws-lambda-go/lambda"
+	"github.com/nathants/aws-exec/backend"
 	"github.com/nathants/libaws/lib"
 )
 
@@ -28,8 +32,15 @@ func usage() {
 	}
 }
 
+// we use a single binary for both lambda and the cli
 func main() {
-	if len(os.Args) < 2 || os.Args[1] == "-h" || os.Args[1] == "--help" {
+	// start lambda
+	if len(os.Args) == 1 {
+		lambda.Start(backend.HandleRequest)
+		return
+	}
+	// start cli
+	if os.Args[1] == "-h" || os.Args[1] == "--help" {
 		usage()
 		os.Exit(1)
 	}

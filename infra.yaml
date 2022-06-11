@@ -11,14 +11,17 @@ s3:
       - cors=true
       - acl=private
       - ttldays=1
+
 lambda:
   ${PROJECT_NAME}:
-    entrypoint: backend/backend.go
+    entrypoint: main.go
+
     attr:
       - concurrency=0
       - memory=128
       - timeout=900
       - logs-ttl-days=1
+
     trigger:
       - type: api
         attr:
@@ -26,15 +29,21 @@ lambda:
       - type: schedule
         attr:
           - rate(5 minutes)
+
     policy:
       - AWSLambdaBasicExecutionRole
+
     allow:
       - dynamodb:GetItem arn:aws:dynamodb:*:*:table/${PROJECT_NAME}
       - s3:* arn:aws:s3:::${PROJECT_BUCKET}/*
       - lambda:InvokeFunction arn:aws:lambda:*:*:function:${PROJECT_NAME}
+
     include:
       - ./frontend/public/index.html.gz
       - ./frontend/public/favicon.png
+      - ./cli
+      - ./readme.txt
+
     env:
       - PROJECT_NAME=${PROJECT_NAME}
       - PROJECT_DOMAIN=${PROJECT_DOMAIN}
@@ -42,16 +51,19 @@ lambda:
       - PROJECT_BUCKET=${PROJECT_BUCKET}
 
 ## vpc, instance profile, and keypair are only needed for: bin/relay.sh
+
 vpc:
   relay:
     security-group:
       relay:
         rule:
           - tcp:22:0.0.0.0/0
+
 instance-profile:
   relay:
     allow:
       - lambda:UpdateFunctionCode *
+
 keypair:
   relay:
     pubkey-content: ${PUBKEY_CONTENT}

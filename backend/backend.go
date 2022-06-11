@@ -1,4 +1,4 @@
-package main
+package backend
 
 import (
 	"bufio"
@@ -24,7 +24,6 @@ import (
 	"time"
 
 	"github.com/aws/aws-lambda-go/events"
-	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbattribute"
@@ -240,8 +239,10 @@ func httpExecPost(ctx context.Context, event *events.APIGatewayProxyRequest, res
 		EventType: exec.EventExec,
 		Uid:       uid,
 		AuthName:  authName,
-		Argv:      postReqest.Argv,
 		PushUrls:  postReqest.PushUrls,
+		Argv:      postReqest.Argv,
+		RpcName:   postReqest.RpcName,
+		RpcArgs:   postReqest.RpcArgs,
 	})
 	if err != nil {
 		panic(err)
@@ -393,53 +394,31 @@ func logRecover(r interface{}, res chan<- events.APIGatewayProxyResponse) {
 	}
 }
 
+// invoke a command via subprocess or rpc, shipping results to s3 via size, exit, and log objects
 func handleAsyncEvent(ctx context.Context, event *exec.AsyncEvent, res chan<- events.APIGatewayProxyResponse) {
 	bucket := os.Getenv("PROJECT_BUCKET")
 	start := time.Now()
-	cmd := osexec.CommandContext(ctx, event.Argv[0], event.Argv[1:]...)
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		panic(err)
-	}
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		panic(err)
-	}
+	exitCode := 0
 	lines := make(chan *string, 128)
-	go func() {
-		// defer func() {}()
-		for {
-			if time.Since(start) > 14*time.Minute {
-				lines <- aws.String("timeout after 14 minutes")
-				_ = cmd.Process.Signal(syscall.SIGKILL)
-				return
-			}
-			select {
-			case <-ctx.Done():
-				return
-			default:
-				time.Sleep(1 * time.Second)
-			}
-		}
-	}()
-	for _, r := range []io.ReadCloser{stdout, stderr} {
-		r := r
-		go func() {
-			// defer func() {}()
-			readBuf := bufio.NewReader(r)
-			for {
-				line, err := readBuf.ReadString('\n')
-				if err != nil {
-					lines <- nil
-					return
-				}
-				line = strings.TrimRight(line, "\n")
-				lines <- &line
-			}
-		}()
-	}
 	logsDone := make(chan error)
 	logFileSize := 0
+
+	// follow an output stream, ie stdout or stderr
+	follow := func(r io.ReadCloser) {
+		// defer func() {}()
+		readBuf := bufio.NewReader(r)
+		for {
+			line, err := readBuf.ReadString('\n')
+			if err != nil {
+				lines <- nil
+				return
+			}
+			line = strings.TrimRight(line, "\n")
+			lines <- &line
+		}
+	}
+
+	// log shipping loop
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
@@ -459,6 +438,8 @@ func handleAsyncEvent(ctx context.Context, event *exec.AsyncEvent, res chan<- ev
 			panic(err)
 		}
 		logFileWriter := bufio.NewWriter(logFile)
+
+		// log shipping func
 		shipLogs := func() {
 			err = lib.Retry(ctx, func() error {
 				logLock.Lock()
@@ -490,6 +471,8 @@ func handleAsyncEvent(ctx context.Context, event *exec.AsyncEvent, res chan<- ev
 					return nil
 				}
 				lastShippedSize = size
+
+				// ship logs to push urls
 				if event.PushUrls != nil {
 					pr, pw := io.Pipe()
 					errChan := make(chan error)
@@ -526,6 +509,8 @@ func handleAsyncEvent(ctx context.Context, event *exec.AsyncEvent, res chan<- ev
 					}
 					return nil
 				}
+
+				// or ship logs to internal bucket
 				_, err = lib.S3Client().PutObject(&s3.PutObjectInput{
 					Bucket: aws.String(bucket),
 					Key:    aws.String(logKey),
@@ -538,12 +523,15 @@ func handleAsyncEvent(ctx context.Context, event *exec.AsyncEvent, res chan<- ev
 			}
 			lastShippedTime = time.Now()
 		}
+
+		// main log shipping loop
 		for {
 			select {
 			case line := <-lines:
 				if line == nil {
+					// passing nil indicates this stream is closed
 					doneCount++
-					if doneCount == 2 {
+					if doneCount == 3 { // stderr, stdout, and any error from cmd.Start() or cmd.Run()
 						shipLogs()
 						err := logFile.Close()
 						if err != nil {
@@ -553,6 +541,7 @@ func handleAsyncEvent(ctx context.Context, event *exec.AsyncEvent, res chan<- ev
 						return
 					}
 				} else {
+					// otherwise it's log data
 					logLock.Lock()
 					val := *line + "\n"
 					if logFileSize >= exec.MaxLogBytes {
@@ -573,26 +562,115 @@ func handleAsyncEvent(ctx context.Context, event *exec.AsyncEvent, res chan<- ev
 					logLock.Unlock()
 				}
 			case <-time.After(exec.LogShipInterval):
-				// check if logs need to be shipped even when no new output
+				// don't wait for new lines to ship existing logs
 			}
+			// ship logs if needed
 			if time.Since(lastShippedTime) > exec.LogShipInterval {
 				shipLogs()
 			}
 		}
 	}()
-	exitCode := 0
-	err = cmd.Start()
-	if err != nil {
-		lib.Logger.Println("error:", err)
-		exitCode = 1
-	} else {
-		<-logsDone
-		err = cmd.Wait()
+
+	if event.RpcName != "" {
+
+		// invoke command via rpc
+		ctx, cancel := context.WithTimeout(ctx, 14*time.Minute)
+		defer cancel()
+		pr, pw := io.Pipe()
+		go follow(pr)
+		bw := bufio.NewWriter(pw)
+		println := func(v ...interface{}) {
+			var xs []string
+			for _, x := range v {
+				xs = append(xs, fmt.Sprint(x))
+			}
+			_, err := bw.WriteString(strings.Join(xs, " ") + "\n")
+			if err != nil {
+				panic(err)
+			}
+		}
+		fn, ok := exec.Rpc[event.RpcName]
+		if !ok {
+			res <- events.APIGatewayProxyResponse{
+				StatusCode: 404,
+			}
+			return
+		}
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					stack := string(debug.Stack())
+					lines <- aws.String(fmt.Sprint(r))
+					lines <- aws.String(stack)
+					exitCode = 1
+				}
+			}()
+			err := fn(ctx, println, event.RpcArgs)
+			if err != nil {
+				println("error:", err)
+				exitCode = 1
+			}
+		}()
+		err := bw.Flush()
 		if err != nil {
+			panic(err)
+		}
+		err = pw.Close()
+		if err != nil {
+			panic(err)
+		}
+		lines <- nil // rpc only has stdout, so send an extra nil for stderr
+		lines <- nil // rpc only has stdout, so send an extra nil for cmd.Start()
+		<-logsDone
+
+	} else {
+
+		// invoke command via subprocess
+		cmd := osexec.CommandContext(ctx, event.Argv[0], event.Argv[1:]...)
+		stdout, err := cmd.StdoutPipe()
+		if err != nil {
+			panic(err)
+		}
+		stderr, err := cmd.StderrPipe()
+		if err != nil {
+			panic(err)
+		}
+		go func() {
+			// defer func() {}()
+			for {
+				if time.Since(start) > 14*time.Minute {
+					lines <- aws.String("timeout after 14 minutes")
+					_ = cmd.Process.Signal(syscall.SIGKILL)
+					return
+				}
+				select {
+				case <-ctx.Done():
+					return
+				default:
+					time.Sleep(1 * time.Second)
+				}
+			}
+		}()
+		go follow(stdout)
+		go follow(stderr)
+		err = cmd.Start()
+		if err != nil {
+			lines <- aws.String(fmt.Sprintf("error: %s", err))
+			lines <- nil
 			exitCode = 1
+		} else {
+			lines <- nil
+			<-logsDone
+			err = cmd.Wait()
+			if err != nil {
+				exitCode = 1
+			}
 		}
 	}
+
 	if event.PushUrls != nil {
+
+		// ship size and exit to pushurls
 		err := lib.Retry(ctx, func() error {
 			payload := []byte(fmt.Sprint(exitCode))
 			putReq, err := http.NewRequest(http.MethodPut, event.PushUrls.Exit, bytes.NewReader(payload))
@@ -635,9 +713,12 @@ func handleAsyncEvent(ctx context.Context, event *exec.AsyncEvent, res chan<- ev
 		if err != nil {
 			panic(err)
 		}
+
 	} else {
+
+		// ship size and exit to internal bucket
 		exitKey := fmt.Sprintf("jobs/%s/%s/exit", event.AuthName, event.Uid)
-		err = lib.Retry(ctx, func() error {
+		err := lib.Retry(ctx, func() error {
 			_, err := lib.S3Client().PutObject(&s3.PutObjectInput{
 				Bucket: aws.String(bucket),
 				Key:    aws.String(exitKey),
@@ -661,6 +742,7 @@ func handleAsyncEvent(ctx context.Context, event *exec.AsyncEvent, res chan<- ev
 			panic(err)
 		}
 	}
+
 	res <- events.APIGatewayProxyResponse{
 		Body:       "ok",
 		StatusCode: 200,
@@ -711,7 +793,7 @@ func timestamp() string {
 	return time.Now().UTC().Format(time.RFC3339)
 }
 
-func handleRequest(ctx context.Context, event map[string]interface{}) (events.APIGatewayProxyResponse, error) {
+func HandleRequest(ctx context.Context, event map[string]interface{}) (events.APIGatewayProxyResponse, error) {
 	setupLogging(ctx)
 	defer lib.Logger.Flush()
 	start := time.Now()
@@ -799,8 +881,4 @@ func setupLogging(ctx context.Context) {
 			}
 		}
 	}()
-}
-
-func main() {
-	lambda.Start(handleRequest)
 }

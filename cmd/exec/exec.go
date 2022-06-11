@@ -1,4 +1,4 @@
-package awsexec
+package cmd
 
 import (
 	"context"
@@ -11,6 +11,7 @@ import (
 )
 
 func init() {
+	// expose this cmd via the cli
 	lib.Commands["exec"] = exec
 	lib.Args["exec"] = execArgs{}
 }
@@ -20,21 +21,24 @@ type execArgs struct {
 }
 
 func (execArgs) Description() string {
-	return "\nexec\n"
+	return `
+invoke command via subprocess
+
+usage: bash bin/cli.sh exec ./cli listdir .
+`
 }
 
 func exec() {
 	var args execArgs
 	arg.MustParse(&args)
-	_ = os.Getenv("PROJECT_NAME")
-	domain := os.Getenv("PROJECT_DOMAIN")
-	auth := os.Getenv("AUTH")
-	url := fmt.Sprintf("https://%s", domain)
-	ctx := context.Background()
-	callback := func(logs string) {
-		fmt.Print(logs)
-	}
-	exitCode, err := awsexec.Exec(ctx, url, auth, args.Argv, callback, nil)
+	exitCode, err := awsexec.Exec(context.Background(), &awsexec.Args{
+		Url:  fmt.Sprintf("https://%s", os.Getenv("PROJECT_DOMAIN")),
+		Auth: os.Getenv("AUTH"),
+		Argv: args.Argv,
+		LogDataCallback: func(logs string) {
+			fmt.Print(logs)
+		},
+	})
 	if err != nil {
 		lib.Logger.Fatal("error: ", err)
 	}

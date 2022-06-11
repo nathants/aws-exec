@@ -1,4 +1,4 @@
-package awsexec
+package cmd
 
 import "github.com/nathants/libaws/lib"
 

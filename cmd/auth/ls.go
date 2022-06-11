@@ -1,4 +1,4 @@
-package awsexec
+package cmd
 
 import (
 	"context"
@@ -8,6 +8,7 @@ import (
 
 	"github.com/alexflint/go-arg"
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbattribute"
 	"github.com/nathants/aws-exec/exec"
@@ -15,6 +16,7 @@ import (
 )
 
 func init() {
+	// expose this cmd via the cli
 	lib.Commands["auth-ls"] = authLs
 	lib.Args["auth-ls"] = authLsArgs{}
 }
@@ -39,6 +41,10 @@ func authLs() {
 				TableName:         aws.String(table),
 				ExclusiveStartKey: start,
 			})
+			aerr, ok := err.(awserr.Error)
+			if ok && aerr.Code() == "AccessDeniedException" {
+				panic(err)
+			}
 			return err
 		})
 		if err != nil {

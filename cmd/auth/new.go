@@ -1,4 +1,4 @@
-package awsexec
+package cmd
 
 import (
 	"context"
@@ -7,6 +7,7 @@ import (
 
 	"github.com/alexflint/go-arg"
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbattribute"
 	"github.com/nathants/aws-exec/exec"
@@ -14,6 +15,7 @@ import (
 )
 
 func init() {
+	// expose this cmd via the cli
 	lib.Commands["auth-new"] = authNew
 	lib.Args["auth-new"] = authNewArgs{}
 }
@@ -47,6 +49,10 @@ func authNew() {
 			Item:      item,
 			TableName: aws.String(table),
 		})
+		aerr, ok := err.(awserr.Error)
+		if ok && aerr.Code() == "AccessDeniedException" {
+			panic(err)
+		}
 		return err
 	})
 	if err != nil {

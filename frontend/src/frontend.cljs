@@ -214,6 +214,11 @@
           (swap! state assoc :cmd-text "")
           (swap! state assoc :offset 0))
       ;;
+      (= "clear" cmd)
+      (do (swap! state assoc :events [])
+          (swap! state assoc :cmd-text "")
+          (swap! state assoc :offset 0))
+      ;;
       :else
       (go (swap! state update-in [:history] conj cmd)
           (swap! state update-in [:events] #(vec (take-last max-events (conj % (str ">> " cmd)))))
