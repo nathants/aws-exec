@@ -24,7 +24,7 @@ each invocation creates 3 objects in s3:
 - size: the size in bytes of the log after the final update, written once, written last.
 
 objects are stored in either:
-- aws-exec's internal s3 bucket.
+- aws-exec private s3.
 - presigned s3 put urls provided by the caller.
 
 to follow invocation status, the caller:
@@ -41,9 +41,9 @@ the provided [infrastructure set](https://github.com/nathants/aws-exec/blob/mast
 
 ## tradeoffs
 
-asynchronous invocation means that there is a low, but minimum, execution time for every invocation.
+asynchronous invocation means that there is a low, but minimum, execution time.
 
-to add command functionality that is fast and returns all results immediately, add to [api/](https://github.com/nathants/aws-exec/tree/master/backend/backend.go#L353) instead of [cmd/](https://github.com/nathants/aws-exec/tree/master/cmd).
+to add synchronous command that is fast and returns all results immediately, add to [api/](https://github.com/nathants/aws-exec/tree/master/backend/backend.go#L353) instead of [cmd/](https://github.com/nathants/aws-exec/tree/master/cmd).
 
 ## usage
 
@@ -65,7 +65,9 @@ cmd/
     └── rpc.go
 ```
 
-duplicate the [listdir](https://github.com/nathants/aws-exec/tree/master/cmd/listdir/listdir.go) command and modify to introduce new functionality. [listdir](https://github.com/nathants/aws-exec/tree/master/cmd/listdir/listdir.go) is the only provided command exposed via [subprocess](https://github.com/nathants/aws-exec/tree/master/cmd/exec/exec.go) and [rpc](https://github.com/nathants/aws-exec/tree/master/cmd/rpc/rpc.go).
+duplicate the [listdir](https://github.com/nathants/aws-exec/tree/master/cmd/listdir/listdir.go) command and modify it to introduce new functionality.
+
+[listdir](https://github.com/nathants/aws-exec/tree/master/cmd/listdir/listdir.go) provided as a simple example command that is exposed as both [subprocess](https://github.com/nathants/aws-exec/tree/master/cmd/exec/exec.go) and [rpc](https://github.com/nathants/aws-exec/tree/master/cmd/rpc/rpc.go).
 
 ## web demo
 
@@ -175,7 +177,7 @@ func main() {
 	    panic(err)
 	}
 	exitCode, err := awsexec.Exec(context.Background(), &awsexec.Args{
-		Url:     fmt.Sprintf("https://%s", os.Getenv("PROJECT_DOMAIN")),
+		Url:     "https://%s" + os.Getenv("PROJECT_DOMAIN"),
 		Auth:    os.Getenv("AUTH"),
 		RpcName: "listdir",
 		RpcArgs: string(val),
