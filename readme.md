@@ -6,68 +6,58 @@ building services on lambda should be easy and fun.
 
 ## what
 
-a project scaffold for aws providing asynchronous execution on lambda with streaming logs, exitcode, and 15 minutes max duration.
+a project scaffold for a backend service on aws with an [infrastructure set](https://github.com/nathants/aws-exec/blob/master/infra.yaml) ready-to-deploy with [libaws](https://github.com/nathants/libaws).
 
-the [web](#web-demo) interface is easy to use, even from a [phone](#mobile-demo).
+the project scaffold makes it easy to:
 
-the [cli](#cli-demo) interface is easy to use locally, and can execute locally or on lambda.
+- authenticate callers.
 
-the [api](#api-demo) interface is easy to use efficiently from other services.
+- implement fast synchronous apis that return all results immediately.
+
+- implement slow asynchronous apis with streaming logs, exit code, and 15 minutes max duration.
+
+- use the [web](#web-demo) admin interface, even from a [phone](#mobile-demo).
+
+- use the [cli](#cli-demo) admin interface, executing locally or on lambda.
+
+- use the [api](#api-demo) interface, calling efficiently from other backend services.
 
 ## how
 
-a http post to apigateway triggers an async lambda which invokes a command via [rpc](https://github.com/nathants/aws-exec/tree/master/cmd/rpc/rpc.go) or [subprocess](https://github.com/nathants/aws-exec/tree/master/cmd/exec/exec.go) and stores the result in s3.
+synchronous apis are normal http on lambda.
 
-each invocation creates 3 objects in s3:
-- log: all stdout and stderr, updated in its entirety every second.
-- exit: the exit code of the command, written once.
-- size: the size in bytes of the log after the final update, written once, written last.
+asynchronous apis are a http post that triggers an async lambda which invokes a command via [rpc](https://github.com/nathants/aws-exec/tree/master/cmd/rpc/rpc.go) or [subprocess](https://github.com/nathants/aws-exec/tree/master/cmd/exec/exec.go) and stores the results in s3.
 
-objects are stored in either:
-- aws-exec private s3.
-- presigned s3 put urls provided by the caller.
+  - each invocation creates 3 objects in s3:
+    - log: all stdout and stderr, updated in its entirety every second.
+    - exit: the exit code of the command, written once.
+    - size: the size in bytes of the log after the final update, written once, written last.
 
-to follow invocation status, the caller:
-- polls the log object with increasing range-start.
-- stops when the size object exists and range-start equals size.
-- returns the exit object.
+  - objects are stored in either:
+    - aws-exec private s3.
+    - presigned s3 put urls provided by the caller.
 
-there are three ways to invoke a command:
-- [api](#api-demo) invoke a command via [rpc](https://github.com/nathants/aws-exec/tree/master/cmd/rpc/rpc.go), this is faster.
-- [cli](#cli-demo) invoke a command via [subprocess](https://github.com/nathants/aws-exec/tree/master/cmd/exec/exec.go), this is slower.
-- [web](#web-demo) invoke a command via [subprocess](https://github.com/nathants/aws-exec/tree/master/cmd/exec/exec.go), this is slower.
+  - to follow invocation status, the caller:
+    - polls the log object with increasing range-start.
+    - stops when the size object exists and range-start equals size.
+    - returns the exit object.
 
-the provided [infrastructure set](https://github.com/nathants/aws-exec/blob/master/infra.yaml) is ready-to-deploy with [libaws](https://github.com/nathants/libaws).
+there are three ways to invoke an asynchronous api:
+- [api](#api-demo) invoke via [rpc](https://github.com/nathants/aws-exec/tree/master/cmd/rpc/rpc.go), this is faster.
+- [cli](#cli-demo) invoke via [subprocess](https://github.com/nathants/aws-exec/tree/master/cmd/exec/exec.go), this is slower.
+- [web](#web-demo) invoke via [subprocess](https://github.com/nathants/aws-exec/tree/master/cmd/exec/exec.go), this is slower.
 
-## tradeoffs
+## add a new synchronous functionality
 
-asynchronous invocation means that there is a low, but minimum, execution time.
+add to [api/](https://github.com/nathants/aws-exec/tree/master/backend/backend.go#L353).
 
-to add a synchronous command that is fast and returns all results immediately, add to [api/](https://github.com/nathants/aws-exec/tree/master/backend/backend.go#L353) instead of [cmd/](https://github.com/nathants/aws-exec/tree/master/cmd).
+duplicate the [httpExecGet](https://github.com/nathants/aws-exec/tree/master/backend/backend.go#L140) or [httpExecPost](https://github.com/nathants/aws-exec/tree/master/backend/backend.go#L224) handler and modify it to introduce new functionality.
 
-## usage
+## add a new asynchronous functionality
 
-define new commands in [cmd/](https://github.com/nathants/aws-exec/tree/master/cmd) to add functionality to your service. these commands can be exposed via [subprocess](https://github.com/nathants/aws-exec/tree/master/cmd/exec/exec.go) and/or [rpc](https://github.com/nathants/aws-exec/tree/master/cmd/rpc/rpc.go).
-
-```bash
->> tree cmd/
-
-cmd/
-├── auth
-│   ├── ls.go
-│   ├── new.go
-│   └── rm.go
-├── exec
-│   └── exec.go
-├── listdir
-│   └── listdir.go
-└── rpc
-    └── rpc.go
-```
+add to [cmd/](https://github.com/nathants/aws-exec/tree/master/cmd).
 
 duplicate the [listdir](https://github.com/nathants/aws-exec/tree/master/cmd/listdir/listdir.go) command and modify it to introduce new functionality.
-
-[listdir](https://github.com/nathants/aws-exec/tree/master/cmd/listdir/listdir.go) provided as a simple example command that is exposed as both [subprocess](https://github.com/nathants/aws-exec/tree/master/cmd/exec/exec.go) and [rpc](https://github.com/nathants/aws-exec/tree/master/cmd/rpc/rpc.go).
 
 ## web demo
 
