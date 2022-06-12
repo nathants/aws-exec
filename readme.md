@@ -6,7 +6,7 @@ building services on lambda should be easy and fun.
 
 ## what
 
-asynchronous execution on lambda with streaming logs, exitcode, and 15 minutes max duration.
+a project scaffold for aws providing asynchronous execution on lambda with streaming logs, exitcode, and 15 minutes max duration.
 
 the [web](#web-demo) interface is easy to use, even from a [phone](#mobile-demo).
 
