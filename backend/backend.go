@@ -815,7 +815,8 @@ func HandleRequest(ctx context.Context, event map[string]interface{}) (events.AP
 			authName = "-"
 		}
 		ip := event["requestContext"].(map[string]interface{})["identity"].(map[string]interface{})["sourceIp"].(string)
-		lib.Logger.Println("http", r.StatusCode, path, authName, uid, time.Since(start), ip, timestamp())
+		method := event["httpMethod"]
+		lib.Logger.Println("http", r.StatusCode, method, path, authName, uid, time.Since(start), ip, timestamp())
 	} else {
 		uid, ok := event["Uid"].(string)
 		if !ok {
