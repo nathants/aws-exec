@@ -584,7 +584,7 @@ func handleAsyncEvent(ctx context.Context, event *exec.AsyncEvent, res chan<- ev
 			for _, x := range v {
 				xs = append(xs, fmt.Sprint(x))
 			}
-			_, err := bw.WriteString(strings.Join(xs, " ") + "\n")
+			_, err := bw.WriteString(strings.TrimRight(strings.Join(xs, " "), "\n") + "\n")
 			if err != nil {
 				panic(err)
 			}
