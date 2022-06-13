@@ -588,6 +588,10 @@ func handleAsyncEvent(ctx context.Context, event *exec.AsyncEvent, res chan<- ev
 			if err != nil {
 				panic(err)
 			}
+			err = bw.Flush()
+			if err != nil {
+			    panic(err)
+			}
 		}
 		fn, ok := exec.Rpc[event.RpcName]
 		if !ok {
