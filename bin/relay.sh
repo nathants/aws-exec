@@ -75,16 +75,16 @@ libaws ec2-ssh $name -c '
 
 cd ..
 
-watch_files=$(
-    find $watchdir1 -type f | grep -e '\.go$' -e '\.mod$' -e '\.sum$' -e '\.yml$' -e '\.yaml$' -e '\.sh$'
-)
-
-watch_directories=$(
-    echo "$watch_files" | sed -r 's:/[^/]+*$::' | sort -u | grep '/'
-)
-
 # when a file is added/removed, the outer loop starts over. when a file is changed, the inner loop handles it.
 while true; do (
+
+    watch_files=$(
+        find $watchdir1 -type f | grep -e '\.go$' -e '\.mod$' -e '\.sum$' -e '\.yml$' -e '\.yaml$' -e '\.sh$'
+    )
+
+    watch_directories=$(
+        echo "$watch_files" | sed -r 's:/[^/]+*$::' | sort -u | grep '/'
+    )
 
     # rsync files, this is only slow the first time
     libaws ec2-rsync $(cd $watchdir1 && pwd)/ :$watchdir1/ $name
