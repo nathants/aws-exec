@@ -13,11 +13,12 @@ if [ -z "${NOJS:-}" ]; then
 
     # inline js into html then gzip
     temp=$(mktemp)
-    cat frontend/public/index.html | grep script -B100 | grep -v script >> $temp
-    echo '<script type="text/javascript" charset="utf-8">' >> $temp
+    hash=$(cat frontend/public/js/main.js | openssl sha256 -binary | openssl base64)
+    cat frontend/public/index.html | grep "text/javascript" -B100 | grep -v "text/javascript" | sed "s:HASH:$hash:" >> $temp
+    echo -n '<script type="text/javascript" charset="utf-8">' >> $temp
     cat frontend/public/js/main.js >> $temp
     echo '</script>' >> $temp
-    cat frontend/public/index.html | grep script -A100 | grep -v script >> $temp
+    cat frontend/public/index.html | grep "text/javascript" -A100 | grep -v "text/javascript" >> $temp
     cat $temp | gzip --best > frontend/public/index.html.gz
     rm $temp frontend/public/js/*
 fi
