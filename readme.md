@@ -91,7 +91,7 @@ use the included [Dockerfile](./Dockerfile) or install the following dependencie
 
 - aws [acm](https://us-west-2.console.aws.amazon.com/acm/home) has a wildcard cert for the domain or its parent from env.sh
 
-## deploy
+## usage
 
 ```bash
 go install github.com/nathants/libaws@latest
@@ -107,7 +107,15 @@ bash bin/delete.sh        # delete aws infra
 bash bin/cli.sh -h        # interact with the service via the cli
 ```
 
-## deploy with docker
+## usage with bad upload bandwidth:
+
+```bash
+# bash bin/dev.sh         # this needs upload bandwidth
+bash bin/dev_frontend.sh  # iterate on localhost frontend
+bash bin/relay.sh         # iterate on backend via ec2 relay
+```
+
+## usage with docker
 
 ```bash
 cp env.sh.template env.sh # update values
