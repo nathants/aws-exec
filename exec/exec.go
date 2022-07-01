@@ -154,6 +154,7 @@ func CaseInsensitiveGet(m map[string]string, k string) (string, bool) {
 //
 func Exec(ctx context.Context, args *Args) (int, error) {
 	postResponse := PostResponse{}
+	var expectedErr error
 	err := lib.RetryAttempts(ctx, 7, func() error {
 		client := http.Client{}
 		data, err := json.Marshal(PostRequest{
@@ -189,8 +190,13 @@ func Exec(ctx context.Context, args *Args) (int, error) {
 		if fmt.Sprint(out.StatusCode)[:1] == "5" {
 			return fmt.Errorf("%d %s", out.StatusCode, string(data))
 		}
-		panic(fmt.Sprintf("%d %s", out.StatusCode, string(data)))
+		expectedErr = fmt.Errorf("%d %s", out.StatusCode, string(data))
+		return nil
 	})
+	if expectedErr != nil {
+		lib.Logger.Println("error:", expectedErr)
+		return -1, expectedErr
+	}
 	if err != nil {
 		lib.Logger.Println("error:", err)
 		return -1, err
