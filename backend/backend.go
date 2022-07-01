@@ -222,7 +222,7 @@ func httpExecGet(ctx context.Context, event *events.APIGatewayProxyRequest, res 
 }
 
 func httpExecPost(ctx context.Context, event *events.APIGatewayProxyRequest, res chan<- events.APIGatewayProxyResponse, authName string) {
-	postReqest := exec.PostRequest{}
+	postRequest := exec.PostRequest{}
 	if event.IsBase64Encoded {
 		data, err := base64.StdEncoding.DecodeString(event.Body)
 		if err != nil {
@@ -230,19 +230,26 @@ func httpExecPost(ctx context.Context, event *events.APIGatewayProxyRequest, res
 		}
 		event.Body = string(data)
 	}
-	err := json.Unmarshal([]byte(event.Body), &postReqest)
+	err := json.Unmarshal([]byte(event.Body), &postRequest)
 	if err != nil {
 		panic(fmt.Sprint(event.Body, err))
+	}
+	_, ok := exec.Rpc[postRequest.RpcName]
+	if !ok {
+		res <- events.APIGatewayProxyResponse{
+			StatusCode: 404,
+		}
+		return
 	}
 	uid := fmt.Sprintf("%d.%s", time.Now().Unix(), uuid.Must(uuid.NewV4()).String())
 	data, err := json.Marshal(exec.AsyncEvent{
 		EventType: exec.EventExec,
 		Uid:       uid,
 		AuthName:  authName,
-		PushUrls:  postReqest.PushUrls,
-		Argv:      postReqest.Argv,
-		RpcName:   postReqest.RpcName,
-		RpcArgs:   postReqest.RpcArgs,
+		PushUrls:  postRequest.PushUrls,
+		Argv:      postRequest.Argv,
+		RpcName:   postRequest.RpcName,
+		RpcArgs:   postRequest.RpcArgs,
 	})
 	if err != nil {
 		panic(err)
@@ -590,15 +597,12 @@ func handleAsyncEvent(ctx context.Context, event *exec.AsyncEvent, res chan<- ev
 			}
 			err = bw.Flush()
 			if err != nil {
-			    panic(err)
+				panic(err)
 			}
 		}
 		fn, ok := exec.Rpc[event.RpcName]
 		if !ok {
-			res <- events.APIGatewayProxyResponse{
-				StatusCode: 404,
-			}
-			return
+			panic(event.RpcName)
 		}
 		func() {
 			defer func() {
