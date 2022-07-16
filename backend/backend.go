@@ -235,7 +235,7 @@ func httpExecPost(ctx context.Context, event *events.APIGatewayProxyRequest, res
 		panic(fmt.Sprint(event.Body, err))
 	}
 	_, ok := exec.Rpc[postRequest.RpcName]
-	if !ok {
+	if !ok && postRequest.RpcName != "" {
 		res <- events.APIGatewayProxyResponse{
 			StatusCode: 404,
 		}
