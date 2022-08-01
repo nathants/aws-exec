@@ -26,11 +26,12 @@ watchdir1=aws-exec
 remote_cmd="bash -c 'cd $watchdir1 && ZIP_COMPRESSION=0 bash bin/quick.sh'"
 name=relay
 ssh_opts="-o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no"
+rsync_options="--exclude frontend"
 
 ## spinup the instance if it doesn't already exist
 if ! libaws ec2-ls -s running $name &>/dev/null; then
     libaws ec2-new \
-           --ami alpine \
+           --ami alpine-3.16.1 \
            --type ${relay_type:-c5.large} \
            --key $name \
            --sg $name \
@@ -44,6 +45,9 @@ if ! libaws ec2-ls -s running $name &>/dev/null; then
 fi
 
 libaws ec2-ssh $name -c '
+    echo http://dl-cdn.alpinelinux.org/alpine/edge/main      | sudo tee    /etc/apk/repositories
+    echo http://dl-cdn.alpinelinux.org/alpine/edge/community | sudo tee -a /etc/apk/repositories
+    echo http://dl-cdn.alpinelinux.org/alpine/edge/testing   | sudo tee -a /etc/apk/repositories
     sudo apk update
     sudo apk upgrade -a
     sudo apk add \
@@ -87,6 +91,7 @@ while true; do (
     )
 
     # rsync files, this is only slow the first time
+    export RSYNC_OPTIONS="$rsync_options"
     libaws ec2-rsync $(cd $watchdir1 && pwd)/ :$watchdir1/ $name
 
     (
