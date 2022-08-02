@@ -11,13 +11,19 @@
             [bide.core :as bide]
             [garden.core :as garden]
             [clojure.string :as s]
+            [reagent-mui.material.box :refer [box] :rename {box mui-box}]
+            [reagent-mui.material.switch-component :refer [switch] :rename {switch mui-switch}]
             [reagent-mui.material.card :refer [card] :rename {card mui-card}]
             [reagent-mui.material.text-field :refer [text-field] :rename {text-field mui-text-field}]
             [reagent-mui.material.container :refer [container] :rename {container mui-container}]
             [reagent-mui.material.icon-button :refer [icon-button] :rename {icon-button mui-icon-button}]
+            [reagent-mui.material.typography :refer [typography] :rename {typography mui-typography}]
             [reagent-mui.material.linear-progress :refer [linear-progress] :rename {linear-progress mui-linear-progress}]))
 
 (set! *warn-on-infer* true)
+
+(defn blur-active []
+  (.blur js/document.activeElement))
 
 (def adapt reagent/adapt-react-class)
 
@@ -85,7 +91,7 @@
     :history []
     :offset 0
     :last-distance-from-bottom 0
-    :tail true
+    :log-direction true
     :cmd-focus false
     :key-listener false
     :mouse-listener false
@@ -119,21 +125,6 @@
 
 (defn mousedown-listener [e]
   nil)
-
-(defn scroll-listener [e]
-  (let [distance-from-bottom (- (or (.-scrollTop js/document.documentElement)
-                                    (.-scrollTop js/document.body))
-                                (- (or (.-scrollHeight js/document.documentElement)
-                                       (.-scrollHeight js/document.body))
-                                   (or (.-clientHeight js/document.documentElement)
-                                       (.-clientHeight js/document.body))))
-        scrolling-up (> (:last-distance-from-bottom @state) distance-from-bottom)]
-    (swap! state assoc :last-distance-from-bottom distance-from-bottom)
-    (if scrolling-up
-      (swap! state assoc :tail false)
-      (if (and (:loading @state)
-               (< distance-from-bottom 50))
-        (swap! state assoc :tail true)))))
 
 (defn navigate-to [page]
   (let [a (js/document.createElement "a")]
@@ -316,28 +307,33 @@
   (map #(with-meta % {:key (str (js/Math.random))}) xs))
 
 (defn component-events []
-  (reagent/create-class
-   {:component-did-mount
-    (fn [_]
-      (when (:tail @state)
-        (scroll-to-cmd)))
-    :component-did-update
-    (fn [_ _]
-      (when (:tail @state)
-        (scroll-to-cmd)))
-    :reagent-render
-    (fn []
-      [:<>
-       (for [[i event] (map vector (range) (:events @state))]
-         ^{:key i} [mui-card (assoc-in card-style [:style :white-space] :pre)
-                    [:<> (with-random-key (ansi/text->hiccup event))]])])}))
+  [:<>
+   (for [[i event] (map vector (range) (if (:log-direction @state)
+                                         (reverse (:events @state))
+                                         (:events @state)))]
+     ^{:key i} [mui-card (assoc-in card-style [:style :white-space] :pre)
+                [:<> (with-random-key (ansi/text->hiccup (if (:log-direction @state)
+                                                           (s/join "\n" (reverse (s/split-lines event)))
+                                                           event)))]])])
 
 (defn component-cmd []
   (if (auth?)
     (let [_ (init-on-first-load)
           prompt [mui-card (-> card-style-flex
                              (merge {:id "cmd"})
-                             (update-in [:style] merge {:padding 0}))
+                             (update-in [:style] merge {:padding 0
+                                                        :padding-left "10px"
+                                                        :align-items :center}))
+                  [mui-switch {:size :small
+                               :checked (:log-direction @state)
+                               :on-change #(do (swap! state update-in [:log-direction] not)
+                                               (blur-active))}]
+                  [mui-typography {:style {:margin-top "3px"
+                                           :margin-left "5px"
+                                           :margin-right "7px"}}
+                   (if (:log-direction @state)
+                     [(adapt octo/ArrowUpIcon)]
+                     [(adapt octo/ArrowDownIcon)])]
                   (if (:loading @state)
                     [mui-linear-progress {:style {:width "100%"
                                                   :height "21px"
@@ -358,9 +354,13 @@
                                      :on-change #(swap! state assoc :cmd-text (target-value %))
                                      :style {:background-color "rgb(240,240,240)"
                                              :margin "5px"}}])]]
-      [:<>
-       [component-events]
-       prompt])
+      (if (:log-direction @state)
+        [:<>
+         prompt
+         [component-events]]
+        [:<>
+         [component-events]
+         prompt]))
     [:form
      [mui-card card-style
       [mui-text-field {:label "paste auth here"
@@ -381,7 +381,6 @@
 (defn ^:dev/after-load main []
   (go (document-listener "keydown" keydown-listener)
       (document-listener "mousedown" mousedown-listener)
-      (document-listener "scroll" scroll-listener)
       (<! (lf-set-backend))
       (when-let [auth (<! (lf-get "auth"))]
         (swap! state assoc :auth auth))
