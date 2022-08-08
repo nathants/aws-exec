@@ -26,7 +26,7 @@ inline() {
 EOF
 }
 
-if [ -z "${NOJS:-}" ]; then
+if [ -z "${NOJS:-}" ] || [ ! -f frontend/public/index.html.gz ]; then
     (
         cd frontend
         npm ci
