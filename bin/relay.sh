@@ -66,8 +66,8 @@ libaws ec2-ssh $name -c '
         htop \
         libuser \
         linux-headers \
-        linux-edge4virt \
-        linux-edge4virt-dev \
+        linux-edge \
+        linux-edge-dev \
         musl-dev \
         ncurses-terminfo \
         procps \
