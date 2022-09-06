@@ -151,7 +151,6 @@ func CaseInsensitiveGet(m map[string]string, k string) (string, bool) {
 // pushed repeatedly with the entire log contents. exit will be pushed
 // once and will contain the exit code. size will be pushed once, will
 // be pushed last, and will contain the size of the final log push.
-//
 func Exec(ctx context.Context, args *Args) (int, error) {
 	postResponse := PostResponse{}
 	var expectedErr error
