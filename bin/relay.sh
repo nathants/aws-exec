@@ -26,12 +26,12 @@ watchdir1=aws-exec
 remote_cmd="bash -c 'cd $watchdir1 && ZIP_COMPRESSION=0 bash bin/quick.sh'"
 name=relay
 ssh_opts="-o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no"
-rsync_options="--exclude frontend"
+rsync_options="--exclude .shadow-cljs --exclude node_modules --exclude cljs-runtime --exclude .clj-kondo"
 
 ## spinup the instance if it doesn't already exist
 if ! libaws ec2-ls -s running $name &>/dev/null; then
     libaws ec2-new \
-           --ami alpine-3.16.1 \
+           --ami alpine-3.16.2 \
            --type ${relay_type:-c6i.large} \
            --key $name \
            --sg $name \
@@ -39,7 +39,7 @@ if ! libaws ec2-ls -s running $name &>/dev/null; then
            --profile $name \
            --gigs 32 \
            --spot lowestPrice \
-           --seconds-timeout 3600 \
+           --ephemeral-key \
            $name
     libaws ec2-wait-ssh $name
 fi
@@ -129,7 +129,12 @@ while true; do (
     ) | (
 
         ## update local files and run remote_cmd
-        ssh $ssh_opts $(libaws ec2-ssh-user $name)@$(libaws ec2-ip $name) "
+        uid=$(libaws ec2-ls 2>/dev/null | grep -Eo 'ssh-id=[^ ]+' | cut -d= -f2)
+        key=/tmp/libaws/$uid/id_ed25519
+        username=$(libaws ec2-ssh-user $name)
+        ip=$(libaws ec2-ip $name)
+        target=$username@$ip
+        ssh $ssh_opts -i $key $target "
             export AWS_DEFAULT_REGION=$(libaws aws-region)
             while read line; do
                 read -r file content <<< \"\$line\"
