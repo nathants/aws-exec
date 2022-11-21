@@ -129,7 +129,7 @@ while true; do (
     ) | (
 
         ## update local files and run remote_cmd
-        uid=$(libaws ec2-ls 2>/dev/null | grep -Eo 'ssh-id=[^ ]+' | cut -d= -f2)
+        uid=$(libaws ec2-ls -s running 2>/dev/null | grep -Eo 'ssh-id=[^ ]+' | cut -d= -f2)
         key=/tmp/libaws/$uid/id_ed25519
         username=$(libaws ec2-ssh-user $name)
         ip=$(libaws ec2-ip $name)
