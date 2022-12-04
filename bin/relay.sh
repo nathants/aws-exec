@@ -45,9 +45,6 @@ if ! libaws ec2-ls -s running $name &>/dev/null; then
 fi
 
 libaws ec2-ssh $name -c '
-    if which docker &>/dev/null; then
-        exit 0
-    fi
     echo http://dl-cdn.alpinelinux.org/alpine/edge/main      | sudo tee    /etc/apk/repositories
     echo http://dl-cdn.alpinelinux.org/alpine/edge/community | sudo tee -a /etc/apk/repositories
     echo http://dl-cdn.alpinelinux.org/alpine/edge/testing   | sudo tee -a /etc/apk/repositories
@@ -57,8 +54,6 @@ libaws ec2-ssh $name -c '
         bash \
         coreutils \
         curl \
-        docker \
-        docker-compose \
         git \
         glances \
         go \
@@ -76,11 +71,6 @@ libaws ec2-ssh $name -c '
         vim \
         wget \
         zip
-    sudo addgroup $USER docker
-    sudo rc-service containerd start
-    sudo rc-update add containerd default
-    sudo rc-service docker start
-    sudo rc-update add docker default
     if ! which libaws &>/dev/null; then
         go install github.com/nathants/libaws@latest
         sudo mv -fv $(go env GOPATH)/bin/libaws /usr/local/bin
@@ -88,11 +78,6 @@ libaws ec2-ssh $name -c '
     fi
     sudo reboot
 '
-
-while true; do
-    libaws ec2-ssh $name -c 'docker version' && break
-    echo wait for docker to start
-done
 
 cd ..
 
