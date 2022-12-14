@@ -31,7 +31,7 @@ rsync_options="--exclude .shadow-cljs --exclude node_modules --exclude cljs-runt
 ## spinup the instance if it doesn't already exist
 if ! libaws ec2-ls -s running $name &>/dev/null; then
     libaws ec2-new \
-           --ami alpine-3.16.2 \
+           --ami alpine-3.17.0 \
            --type ${relay_type:-c6i.large} \
            --key $name \
            --sg $name \
