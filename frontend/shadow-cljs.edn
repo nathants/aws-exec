@@ -1,10 +1,9 @@
 {:source-paths ["src"]
- :dependencies [[cljs-http "0.1.46"]
+ :dependencies [[cljs-http "0.1.48"]
                 [garden "1.3.10"]
-                [arttuka/reagent-material-ui "5.10.1-0"]
                 [lambdaisland/ansi "0.2.37"]
                 [funcool/bide "1.7.0"]
-                [reagent "1.1.1"]]
+                [reagent "1.3.0"]]
  :nrepl {:port 3333}
  :dev-http {8000 {:root "public"
                   :proxy-url #shadow/env "PROJECT_URL"
