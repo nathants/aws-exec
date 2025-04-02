@@ -107,14 +107,6 @@ bash bin/delete.sh        # delete aws infra
 bash bin/cli.sh -h        # interact with the service via the cli
 ```
 
-## usage with bad upload bandwidth:
-
-```bash
-# bash bin/dev.sh         # this needs upload bandwidth
-bash bin/dev_frontend.sh  # iterate on localhost frontend
-bash bin/relay.sh         # iterate on backend via ec2 relay
-```
-
 ## usage with docker
 
 ```bash
