@@ -2,6 +2,8 @@
   (:require-macros [cljs.core.async.macros :refer [go go-loop]])
   (:require ["localforage" :as localforage]
             ["@primer/octicons-react" :as octo]
+            ["@mui/material" :as mui]
+            ["react" :as react]
             [lambdaisland.ansi :as ansi]
             [cljs-http.client :as http]
             [cljs.core.async :refer [<! >! chan put! close! timeout] :as a]
@@ -11,14 +13,7 @@
             [bide.core :as bide]
             [garden.core :as garden]
             [clojure.string :as s]
-            [reagent-mui.material.box :refer [box] :rename {box mui-box}]
-            [reagent-mui.material.switch-component :refer [switch] :rename {switch mui-switch}]
-            [reagent-mui.material.card :refer [card] :rename {card mui-card}]
-            [reagent-mui.material.text-field :refer [text-field] :rename {text-field mui-text-field}]
-            [reagent-mui.material.container :refer [container] :rename {container mui-container}]
-            [reagent-mui.material.icon-button :refer [icon-button] :rename {icon-button mui-icon-button}]
-            [reagent-mui.material.typography :refer [typography] :rename {typography mui-typography}]
-            [reagent-mui.material.linear-progress :refer [linear-progress] :rename {linear-progress mui-linear-progress}]))
+            [reagent.impl.template :as rtpl]))
 
 (set! *warn-on-infer* true)
 
@@ -306,12 +301,52 @@
 (defn with-random-key [xs]
   (map #(with-meta % {:key (str (js/Math.random))}) xs))
 
+(def ^:private input-component
+  (react/forwardRef
+   (fn [props ref]
+     (reagent/as-element
+      [:input (-> (js->clj props :keywordize-keys true)
+                (assoc :ref ref))]))))
+
+(def ^:private textarea-component
+  (react/forwardRef
+   (fn [props ref]
+     (reagent/as-element
+      [:textarea (-> (js->clj props :keywordize-keys true)
+                   (assoc :ref ref))]))))
+
+;; To fix cursor jumping when controlled input value is changed,
+;; use wrapper input element created by Reagent instead of
+;; letting Material-UI to create input element directly using React.
+;; Create-element + convert-props-value is the same as what adapt-react-class does.
+(defn text-field [props & children]
+  (let [props (-> props
+                (assoc-in [:InputProps :inputComponent]
+                          (cond
+                            (and (:multiline props) (:rows props) (not (:maxRows props)))
+                            textarea-component
+
+                            ;; FIXME: Autosize multiline field is broken.
+                            (:multiline props)
+                            nil
+
+                            ;; Select doesn't require cursor fix so default can be used.
+                            (:select props)
+                            nil
+
+                            :else
+                            input-component))
+                ;; FIXME: Internal fn should not be used
+                ;; clj->js is not enough as prop on-change -> onChange, class -> classNames etc should be handled
+                rtpl/convert-prop-value)]
+    (apply reagent/create-element mui/TextField props (map reagent/as-element children))))
+
 (defn component-events []
   [:<>
    (for [[i event] (map vector (range) (if (:log-direction @state)
                                          (reverse (:events @state))
                                          (:events @state)))]
-     ^{:key i} [mui-card (assoc-in card-style [:style :white-space] :pre)
+     ^{:key i} [:> mui/Card (assoc-in card-style [:style :white-space] :pre)
                 [:<> (with-random-key (ansi/text->hiccup (if (:log-direction @state)
                                                            (s/join "\n" (reverse (s/split-lines event)))
                                                            event)))]])])
@@ -319,41 +354,41 @@
 (defn component-cmd []
   (if (auth?)
     (let [_ (init-on-first-load)
-          prompt [mui-card (-> card-style-flex
-                             (merge {:id "cmd"})
-                             (update-in [:style] merge {:padding 0
-                                                        :padding-left "10px"
-                                                        :align-items :center}))
-                  [mui-switch {:size :small
-                               :checked (:log-direction @state)
-                               :on-change #(do (swap! state update-in [:log-direction] not)
-                                               (blur-active))}]
-                  [mui-typography {:style {:margin-top "3px"
-                                           :margin-left "5px"
-                                           :margin-right "7px"}}
+          prompt [:> mui/Card (-> card-style-flex
+                                (merge {:id "cmd"})
+                                (update-in [:style] merge {:padding 0
+                                                           :padding-left "10px"
+                                                           :align-items :center}))
+                  [:> mui/Switch {:size :small
+                                  :checked (:log-direction @state)
+                                  :on-change #(do (swap! state update-in [:log-direction] not)
+                                                  (blur-active))}]
+                  [:> mui/Typography {:style {:margin-top "3px"
+                                              :margin-left "5px"
+                                              :margin-right "7px"}}
                    (if (:log-direction @state)
                      [(adapt octo/ArrowUpIcon)]
                      [(adapt octo/ArrowDownIcon)])]
                   (if (:loading @state)
-                    [mui-linear-progress {:style {:width "100%"
-                                                  :height "21px"
-                                                  :margin-left "10px"
-                                                  :margin-right "10px"
-                                                  :margin-top "20px"
-                                                  :margin-bottom "20px"}}]
-                    [mui-text-field {:label "aws-exec"
-                                     :autoComplete "off"
-                                     :spellCheck false
-                                     :multiline true
-                                     :fullWidth true
-                                     :autoFocus true
-                                     :focused (:cmd-focus @state)
-                                     :value (:cmd-text @state)
-                                     :on-focus #(swap! state assoc :cmd-focus true)
-                                     :on-blur #(swap! state assoc :cmd-focus false)
-                                     :on-change #(swap! state assoc :cmd-text (target-value %))
-                                     :style {:background-color "rgb(240,240,240)"
-                                             :margin "5px"}}])]]
+                    [:> mui/LinearProgress {:style {:width "100%"
+                                                    :height "21px"
+                                                    :margin-left "10px"
+                                                    :margin-right "10px"
+                                                    :margin-top "20px"
+                                                    :margin-bottom "20px"}}]
+                    [text-field {:label "aws-exec"
+                                 :autoComplete "off"
+                                 :spellCheck false
+                                 :multiline true
+                                 :fullWidth true
+                                 :autoFocus true
+                                 :focused (:cmd-focus @state)
+                                 :value (:cmd-text @state)
+                                 :on-focus #(swap! state assoc :cmd-focus true)
+                                 :on-blur #(swap! state assoc :cmd-focus false)
+                                 :on-change #(swap! state assoc :cmd-text (target-value %))
+                                 :style {:background-color "rgb(240,240,240)"
+                                         :margin "5px"}}])]]
       (if (:log-direction @state)
         [:<>
          prompt
@@ -362,17 +397,17 @@
          [component-events]
          prompt]))
     [:form
-     [mui-card card-style
-      [mui-text-field {:label "paste auth here"
-                       :value (:auth @state)
-                       :type :password
-                       :on-change #(swap! state assoc :auth (target-value %))
-                       :style {:width "100%"}} ]]]))
+     [:> mui/Card card-style
+      [text-field {:label "paste auth here"
+                   :value (:auth @state)
+                   :type :password
+                   :on-change #(swap! state assoc :auth (target-value %))
+                   :style {:width "100%"}} ]]]))
 
 (defn component-root []
   [:<>
    [:style style]
-   [mui-container {:id "content" :style {:padding 0 :margin-top "10px"}}
+   [:> mui/Container {:id "content" :style {:padding 0 :margin-top "10px"}}
     [component-cmd]]])
 
 (defn reagent-render []
