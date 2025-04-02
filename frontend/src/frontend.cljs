@@ -85,8 +85,6 @@
     :password ""
     :history []
     :offset 0
-    :last-distance-from-bottom 0
-    :log-direction true
     :cmd-focus false
     :key-listener false
     :mouse-listener false
@@ -184,7 +182,6 @@
 
 (defn submit-cmd []
   (let [cmd (:cmd-text @state)]
-    (swap! state assoc :tail true)
     (cond
       ;;
       (= "history clear" cmd)
@@ -343,13 +340,9 @@
 
 (defn component-events []
   [:<>
-   (for [[i event] (map vector (range) (if (:log-direction @state)
-                                         (reverse (:events @state))
-                                         (:events @state)))]
+   (for [[i event] (map vector (range) (reverse (:events @state)))]
      ^{:key i} [:> mui/Card (assoc-in card-style [:style :white-space] :pre)
-                [:<> (with-random-key (ansi/text->hiccup (if (:log-direction @state)
-                                                           (s/join "\n" (reverse (s/split-lines event)))
-                                                           event)))]])])
+                [:<> (with-random-key (ansi/text->hiccup event))]])])
 
 (defn component-cmd []
   (if (auth?)
@@ -359,16 +352,6 @@
                                 (update-in [:style] merge {:padding 0
                                                            :padding-left "10px"
                                                            :align-items :center}))
-                  [:> mui/Switch {:size :small
-                                  :checked (:log-direction @state)
-                                  :on-change #(do (swap! state update-in [:log-direction] not)
-                                                  (blur-active))}]
-                  [:> mui/Typography {:style {:margin-top "3px"
-                                              :margin-left "5px"
-                                              :margin-right "7px"}}
-                   (if (:log-direction @state)
-                     [(adapt octo/ArrowUpIcon)]
-                     [(adapt octo/ArrowDownIcon)])]
                   (if (:loading @state)
                     [:> mui/LinearProgress {:style {:width "100%"
                                                     :height "21px"
@@ -389,13 +372,9 @@
                                  :on-change #(swap! state assoc :cmd-text (target-value %))
                                  :style {:background-color "rgb(240,240,240)"
                                          :margin "5px"}}])]]
-      (if (:log-direction @state)
-        [:<>
-         prompt
-         [component-events]]
-        [:<>
-         [component-events]
-         prompt]))
+      [:<>
+       prompt
+       [component-events]])
     [:form
      [:> mui/Card card-style
       [text-field {:label "paste auth here"
