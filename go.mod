@@ -1,6 +1,6 @@
 module github.com/nathants/aws-exec
 
-go 1.23.0
+go 1.24
 
 toolchain go1.24.1
 
@@ -10,7 +10,7 @@ require (
 	github.com/aws/aws-sdk-go v1.55.6
 	github.com/dustin/go-humanize v1.0.1
 	github.com/gofrs/uuid v4.4.0+incompatible
-	github.com/nathants/libaws v0.0.0-20250402051440-7de3598c8846
+	github.com/nathants/libaws v0.0.0-20250403044500-6a01a31e6116
 	golang.org/x/crypto v0.36.0
 )
 
