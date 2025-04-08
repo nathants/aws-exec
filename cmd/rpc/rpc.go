@@ -33,7 +33,7 @@ usage: bash bin/cli.sh rpc listdir '{"path": "."}'
 func rpc() {
 	var args rpcArgs
 	arg.MustParse(&args)
-	rpcArgs := map[string]interface{}{}
+	rpcArgs := map[string]any{}
 	err := json.Unmarshal([]byte(args.RpcArgsJson), &rpcArgs)
 	if err != nil {
 		lib.Logger.Fatal("error: ", err)

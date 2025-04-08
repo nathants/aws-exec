@@ -393,7 +393,7 @@ func unauthorized() events.APIGatewayProxyResponse {
 	}
 }
 
-func logRecover(r interface{}, res chan<- events.APIGatewayProxyResponse) {
+func logRecover(r any, res chan<- events.APIGatewayProxyResponse) {
 	stack := string(debug.Stack())
 	lib.Logger.Println(r)
 	lib.Logger.Println(stack)
@@ -589,7 +589,7 @@ func handleAsyncEvent(ctx context.Context, event *exec.AsyncEvent, res chan<- ev
 		pr, pw := io.Pipe()
 		go follow(pr)
 		bw := bufio.NewWriter(pw)
-		println := func(v ...interface{}) {
+		println := func(v ...any) {
 			var xs []string
 			for _, x := range v {
 				xs = append(xs, fmt.Sprint(x))
@@ -764,7 +764,7 @@ func handleAsyncEvent(ctx context.Context, event *exec.AsyncEvent, res chan<- ev
 	}
 }
 
-func handle(ctx context.Context, event map[string]interface{}, res chan<- events.APIGatewayProxyResponse) {
+func handle(ctx context.Context, event map[string]any, res chan<- events.APIGatewayProxyResponse) {
 	defer func() {
 		if r := recover(); r != nil {
 			logRecover(r, res)
@@ -804,7 +804,7 @@ func timestamp() string {
 	return time.Now().UTC().Format(time.RFC3339)
 }
 
-func HandleRequest(ctx context.Context, event map[string]interface{}) (events.APIGatewayProxyResponse, error) {
+func HandleRequest(ctx context.Context, event map[string]any) (events.APIGatewayProxyResponse, error) {
 	setupLogging(ctx)
 	defer lib.Logger.Flush()
 	start := time.Now()
@@ -821,7 +821,7 @@ func HandleRequest(ctx context.Context, event map[string]interface{}) (events.AP
 		if authName == "" {
 			authName = "-"
 		}
-		ip := event["requestContext"].(map[string]interface{})["identity"].(map[string]interface{})["sourceIp"].(string)
+		ip := event["requestContext"].(map[string]any)["identity"].(map[string]any)["sourceIp"].(string)
 		method := event["httpMethod"]
 		lib.Logger.Println("http", r.StatusCode, method, path, authName, uid, time.Since(start), ip, timestamp())
 	} else {
@@ -853,7 +853,7 @@ func setupLogging(ctx context.Context) {
 	uid := uuid.Must(uuid.NewV4()).String()
 	count := 0
 	lib.Logger = &lib.LoggerStruct{
-		Print: func(args ...interface{}) {
+		Print: func(args ...any) {
 			lock.Lock()
 			defer lock.Unlock()
 			lines = append(lines, fmt.Sprint(args...))

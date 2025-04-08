@@ -19,7 +19,7 @@ func init() {
 	lib.Args["listdir"] = listdirArgs{}
 
 	// expost the cmd via rpc
-	awsexec.Rpc["listdir"] = func(ctx context.Context, println func(v ...interface{}), argsJson string) error {
+	awsexec.Rpc["listdir"] = func(ctx context.Context, println func(v ...any), argsJson string) error {
 		args := listdirArgs{}
 		err := json.Unmarshal([]byte(argsJson), &args)
 		if err != nil {
@@ -41,7 +41,7 @@ func listdir() {
 	var args listdirArgs
 	arg.MustParse(&args)
 	ctx := context.Background()
-	println := func(v ...interface{}) {
+	println := func(v ...any) {
 		fmt.Println(v...)
 	}
 	err := Listdir(ctx, println, &args)
@@ -50,7 +50,7 @@ func listdir() {
 	}
 }
 
-func Listdir(_ context.Context, println func(v ...interface{}), args *listdirArgs) error {
+func Listdir(_ context.Context, println func(v ...any), args *listdirArgs) error {
 	err := filepath.Walk(args.Path, func(path string, info fs.FileInfo, err error) error {
 		if err == nil && !info.IsDir() && !strings.HasPrefix(path, ".") && !strings.Contains(path, "/.") {
 			println(path)

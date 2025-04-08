@@ -19,7 +19,7 @@ import (
 	"golang.org/x/crypto/blake2b"
 )
 
-type rpcFunc func(ctx context.Context, println func(v ...interface{}), argsJson string) error
+type rpcFunc func(ctx context.Context, println func(v ...any), argsJson string) error
 
 var Rpc = map[string]rpcFunc{}
 

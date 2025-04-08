@@ -160,7 +160,7 @@ import (
 )
 
 func main() {
-	val, err := json.Marshal(map[string]interface{}{
+	val, err := json.Marshal(map[string]any{
 		"path": ".",
 	})
 	if err != nil {
