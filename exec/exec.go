@@ -13,9 +13,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/nathants/libaws/lib"
 	"golang.org/x/crypto/blake2b"
 )
@@ -73,15 +72,15 @@ type AsyncEvent struct {
 
 	// to invoke rpc, provide name and args. this is faster.
 	RpcName string `json:"rpc-name"`
-	RpcArgs string `json:"rpc-args"`
+	RpcArgs string `json:"rpc-args" `
 }
 
 type RecordKey struct {
-	ID string `json:"id"`
+	ID string `json:"id" dynamodbav:"id"`
 }
 
 type RecordData struct {
-	Value string `json:"value"`
+	Value string `json:"value" dynamodbav:"value"`
 }
 
 type Record struct {
@@ -297,7 +296,7 @@ func Tail(ctx context.Context, tailArgs *TailArgs) (int, error) {
 		// once size is known and client has read size bytes, return exit
 		var sizeData []byte
 		_ = lib.Retry(ctx, func() error {
-			outSize, err := lib.S3Client().GetObjectWithContext(ctx, &s3.GetObjectInput{
+			outSize, err := lib.S3Client().GetObject(ctx, &s3.GetObjectInput{
 				Bucket: aws.String(tailArgs.PullBucket),
 				Key:    aws.String(tailArgs.PullKeys.Size),
 			})
@@ -323,7 +322,7 @@ func Tail(ctx context.Context, tailArgs *TailArgs) (int, error) {
 			if rangeStart == size {
 				exitStr := ""
 				err := lib.Retry(ctx, func() error {
-					outExit, err := lib.S3Client().GetObjectWithContext(ctx, &s3.GetObjectInput{
+					outExit, err := lib.S3Client().GetObject(ctx, &s3.GetObjectInput{
 						Bucket: aws.String(tailArgs.PullBucket),
 						Key:    aws.String(tailArgs.PullKeys.Exit),
 					})
@@ -356,21 +355,18 @@ func Tail(ctx context.Context, tailArgs *TailArgs) (int, error) {
 		// otherwize process log data for range-start
 		var data []byte
 		err := lib.Retry(ctx, func() error {
-			out, err := lib.S3Client().GetObjectWithContext(ctx, &s3.GetObjectInput{
+			out, err := lib.S3Client().GetObject(ctx, &s3.GetObjectInput{
 				Bucket: aws.String(tailArgs.PullBucket),
 				Key:    aws.String(tailArgs.PullKeys.Log),
 				Range:  aws.String(fmt.Sprintf("bytes=%d-", rangeStart)),
 			})
 			if err != nil {
-				aerr, ok := err.(awserr.Error)
-				if ok {
-					if aerr.Code() == "InvalidRange" {
-						time.Sleep(tailArgs.LogShipInterval)
-						return nil
-					}
-					if aerr.Code() == "NoSuchKey" {
-						return nil
-					}
+				if strings.Contains(err.Error(), "InvalidRange") {
+					time.Sleep(tailArgs.LogShipInterval)
+					return nil
+				}
+				if strings.Contains(err.Error(), "NoSuchKey") {
+					return nil
 				}
 				return err
 			}

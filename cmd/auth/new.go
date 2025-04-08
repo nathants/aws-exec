@@ -4,12 +4,12 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/alexflint/go-arg"
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/aws/aws-sdk-go/service/dynamodb"
-	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbattribute"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/nathants/aws-exec/exec"
 	"github.com/nathants/libaws/lib"
 )
@@ -33,7 +33,7 @@ func authNew() {
 	arg.MustParse(&args)
 	table := os.Getenv("PROJECT_NAME")
 	key := exec.RandKey()
-	item, err := dynamodbattribute.MarshalMap(exec.Record{
+	item, err := attributevalue.MarshalMap(exec.Record{
 		RecordKey: exec.RecordKey{
 			ID: fmt.Sprintf("auth.%s", exec.Blake2b32(key)),
 		},
@@ -44,19 +44,22 @@ func authNew() {
 	if err != nil {
 		lib.Logger.Fatal("error: ", err)
 	}
+
 	err = lib.Retry(context.Background(), func() error {
-		_, err := lib.DynamoDBClient().PutItem(&dynamodb.PutItemInput{
+		_, err := lib.DynamoDBClient().PutItem(context.Background(), &dynamodb.PutItemInput{
 			Item:      item,
 			TableName: aws.String(table),
 		})
-		aerr, ok := err.(awserr.Error)
-		if ok && aerr.Code() == "AccessDeniedException" {
-			panic(err)
+		if err != nil {
+			if strings.Contains(err.Error(), "AccessDeniedException") {
+				panic(err)
+			}
 		}
 		return err
 	})
 	if err != nil {
 		lib.Logger.Fatal("error: ", err)
 	}
+
 	fmt.Println(key)
 }

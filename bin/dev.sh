@@ -1,7 +1,7 @@
 #!/bin/bash
 set -eou pipefail
 
-source env.sh
+source ${1:-env.sh}
 
 # auto reload frontend
 bash bin/dev_frontend.sh 2>&1 | sed 's/^/shadow-cljs: /' &

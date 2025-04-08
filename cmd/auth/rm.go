@@ -7,10 +7,9 @@ import (
 	"strings"
 
 	"github.com/alexflint/go-arg"
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/aws/aws-sdk-go/service/dynamodb"
-	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbattribute"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/nathants/aws-exec/exec"
 	"github.com/nathants/libaws/lib"
 )
@@ -37,20 +36,21 @@ func authRm() {
 	if !strings.HasPrefix(id, "auth.") {
 		id = fmt.Sprintf("auth.%s", id)
 	}
-	key, err := dynamodbattribute.MarshalMap(exec.RecordKey{
+	key, err := attributevalue.MarshalMap(exec.RecordKey{
 		ID: id,
 	})
 	if err != nil {
 		lib.Logger.Fatal("error: ", err)
 	}
 	err = lib.Retry(context.Background(), func() error {
-		_, err := lib.DynamoDBClient().DeleteItem(&dynamodb.DeleteItemInput{
+		_, err := lib.DynamoDBClient().DeleteItem(context.Background(), &dynamodb.DeleteItemInput{
 			TableName: aws.String(table),
 			Key:       key,
 		})
-		aerr, ok := err.(awserr.Error)
-		if ok && aerr.Code() == "AccessDeniedException" {
-			panic(err)
+		if err != nil {
+			if strings.Contains(err.Error(), "AccessDeniedException") {
+				panic(err)
+			}
 		}
 		return err
 	})

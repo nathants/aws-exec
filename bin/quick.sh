@@ -1,7 +1,7 @@
 #!/bin/bash
 set -eou pipefail
 
-source env.sh
+source ${1:-env.sh}
 
 echo rebuild ${PROJECT_NAME}
 

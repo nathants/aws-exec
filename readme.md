@@ -98,13 +98,13 @@ go install github.com/nathants/libaws@latest
 export PATH=$PATH:$(go env GOPATH)/bin
 
 cp env.sh.template env.sh # update values
-bash bin/check.sh         # lint
-bash bin/preview.sh       # preview changes to aws infra
-bash bin/ensure.sh        # ensure aws infra
-bash bin/dev.sh           # iterate on backend and frontend
-bash bin/logs.sh          # tail the logs
-bash bin/delete.sh        # delete aws infra
-bash bin/cli.sh -h        # interact with the service via the cli
+bash bin/check.sh env.sh         # lint
+bash bin/preview.sh env.sh       # preview changes to aws infra
+bash bin/ensure.sh env.sh        # ensure aws infra
+bash bin/dev.sh env.sh           # iterate on backend and frontend
+bash bin/logs.sh env.sh          # tail the logs
+bash bin/delete.sh env.sh        # delete aws infra
+bash bin/cli.sh env.sh -h        # interact with the service via the cli
 ```
 
 ## usage with docker
@@ -127,7 +127,7 @@ docker run -it --rm \
 ## create auth
 
 ```bash
-bash bin/cli.sh auth-new test-user
+bash bin/cli.sh env.sh auth-new test-user
 ```
 
 ## install and use cli

@@ -24,11 +24,12 @@ import (
 	"time"
 
 	"github.com/aws/aws-lambda-go/events"
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/dynamodb"
-	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbattribute"
-	sdkLambda "github.com/aws/aws-sdk-go/service/lambda"
-	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	sdkLambda "github.com/aws/aws-sdk-go-v2/service/lambda"
+	sdkLambdaTypes "github.com/aws/aws-sdk-go-v2/service/lambda/types"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/dustin/go-humanize"
 	uuid "github.com/gofrs/uuid"
 	"github.com/nathants/aws-exec/exec"
@@ -103,7 +104,7 @@ func notfound() events.APIGatewayProxyResponse {
 }
 
 func checkAuth(ctx context.Context, auth string) (string, bool) {
-	key, err := dynamodbattribute.MarshalMap(exec.RecordKey{
+	key, err := attributevalue.MarshalMap(exec.RecordKey{
 		ID: fmt.Sprintf("auth.%s", exec.Blake2b32(auth)),
 	})
 	if err != nil {
@@ -113,7 +114,7 @@ func checkAuth(ctx context.Context, auth string) (string, bool) {
 	var out *dynamodb.GetItemOutput
 	err = lib.Retry(ctx, func() error {
 		var err error
-		out, err = lib.DynamoDBClient().GetItemWithContext(ctx, &dynamodb.GetItemInput{
+		out, err = lib.DynamoDBClient().GetItem(ctx, &dynamodb.GetItemInput{
 			TableName:      aws.String(table),
 			ConsistentRead: aws.Bool(true),
 			Key:            key,
@@ -127,7 +128,7 @@ func checkAuth(ctx context.Context, auth string) (string, bool) {
 		return "", false
 	}
 	val := exec.Record{}
-	err = dynamodbattribute.UnmarshalMap(out.Item, &val)
+	err = attributevalue.UnmarshalMap(out.Item, &val)
 	if err != nil {
 		panic(err)
 	}
@@ -152,7 +153,7 @@ func httpExecGet(ctx context.Context, event *events.APIGatewayProxyRequest, res 
 	exitKey := fmt.Sprintf("jobs/%s/%s/exit", authName, getRequest.Uid)
 	logKey := fmt.Sprintf("jobs/%s/%s/log.txt", authName, getRequest.Uid)
 	// once size is known and client has read size bytes, return exit
-	outSize, err := lib.S3Client().GetObjectWithContext(ctx, &s3.GetObjectInput{
+	outSize, err := lib.S3Client().GetObject(ctx, &s3.GetObjectInput{
 		Bucket: aws.String(bucket),
 		Key:    aws.String(sizeKey),
 	})
@@ -167,7 +168,7 @@ func httpExecGet(ctx context.Context, event *events.APIGatewayProxyRequest, res 
 		}
 		size := atoi(string(sizeData))
 		if getRequest.RangeStart == size {
-			outExit, err := lib.S3Client().GetObjectWithContext(ctx, &s3.GetObjectInput{
+			outExit, err := lib.S3Client().GetObject(ctx, &s3.GetObjectInput{
 				Bucket: aws.String(bucket),
 				Key:    aws.String(exitKey),
 			})
@@ -197,17 +198,18 @@ func httpExecGet(ctx context.Context, event *events.APIGatewayProxyRequest, res 
 			return
 		}
 	}
-	// otherwize return presigned s3 url for range-start
+	// otherwise return presigned s3 url for range-start
 	rangeHeader := fmt.Sprintf("bytes=%d-", getRequest.RangeStart)
-	req, _ := lib.S3Client().GetObjectRequest(&s3.GetObjectInput{
+	presignClient := s3.NewPresignClient(lib.S3Client())
+	req, err := presignClient.PresignGetObject(ctx, &s3.GetObjectInput{
 		Bucket: aws.String(bucket),
 		Key:    aws.String(logKey),
 		Range:  aws.String(rangeHeader),
-	})
-	url, err := req.Presign(60 * time.Second)
+	}, s3.WithPresignExpires(60*time.Second))
 	if err != nil {
 		panic(err)
 	}
+	url := req.URL
 	respData, err := json.Marshal(exec.GetResponse{
 		Url: url,
 	})
@@ -260,17 +262,17 @@ func httpExecPost(ctx context.Context, event *events.APIGatewayProxyRequest, res
 		"Content-Type": "application/json",
 	}
 	err = lib.Retry(ctx, func() error {
-		out, err := lib.LambdaClient().InvokeWithContext(ctx, &sdkLambda.InvokeInput{
+		out, err := lib.LambdaClient().Invoke(ctx, &sdkLambda.InvokeInput{
 			FunctionName:   aws.String(os.Getenv("AWS_LAMBDA_FUNCTION_NAME")),
-			InvocationType: aws.String(sdkLambda.InvocationTypeEvent),
-			LogType:        aws.String(sdkLambda.LogTypeNone),
+			InvocationType: sdkLambdaTypes.InvocationTypeEvent,
+			LogType:        sdkLambdaTypes.LogTypeNone,
 			Payload:        data,
 		})
 		if err != nil {
 			return err
 		}
-		if *out.StatusCode != 202 {
-			return fmt.Errorf("status %d", *out.StatusCode)
+		if out.StatusCode != 202 {
+			return fmt.Errorf("status %d", out.StatusCode)
 		}
 		return nil
 	})
@@ -444,6 +446,9 @@ func handleAsyncEvent(ctx context.Context, event *exec.AsyncEvent, res chan<- ev
 		if err != nil {
 			panic(err)
 		}
+		defer func() {
+			_ = logFile.Close()
+		}()
 		logFileWriter := bufio.NewWriter(logFile)
 
 		// log shipping func
@@ -459,15 +464,13 @@ func handleAsyncEvent(ctx context.Context, event *exec.AsyncEvent, res chan<- ev
 					panic(err)
 				}
 				logLock.Unlock()
+
 				r, err := os.Open(logFilePath)
 				if err != nil {
 					panic(err)
 				}
 				defer func() {
-					err := r.Close()
-					if err != nil {
-						panic(err)
-					}
+					_ = r.Close()
 				}()
 				fi, err := r.Stat()
 				if err != nil {
@@ -518,7 +521,7 @@ func handleAsyncEvent(ctx context.Context, event *exec.AsyncEvent, res chan<- ev
 				}
 
 				// or ship logs to internal bucket
-				_, err = lib.S3Client().PutObject(&s3.PutObjectInput{
+				_, err = lib.S3Client().PutObject(ctx, &s3.PutObjectInput{
 					Bucket: aws.String(bucket),
 					Key:    aws.String(logKey),
 					Body:   r,
@@ -727,7 +730,7 @@ func handleAsyncEvent(ctx context.Context, event *exec.AsyncEvent, res chan<- ev
 		// ship size and exit to internal bucket
 		exitKey := fmt.Sprintf("jobs/%s/%s/exit", event.AuthName, event.Uid)
 		err := lib.Retry(ctx, func() error {
-			_, err := lib.S3Client().PutObject(&s3.PutObjectInput{
+			_, err := lib.S3Client().PutObject(ctx, &s3.PutObjectInput{
 				Bucket: aws.String(bucket),
 				Key:    aws.String(exitKey),
 				Body:   bytes.NewReader([]byte(fmt.Sprint(exitCode))),
@@ -739,7 +742,7 @@ func handleAsyncEvent(ctx context.Context, event *exec.AsyncEvent, res chan<- ev
 		}
 		sizeKey := fmt.Sprintf("jobs/%s/%s/size", event.AuthName, event.Uid)
 		err = lib.Retry(ctx, func() error {
-			_, err := lib.S3Client().PutObject(&s3.PutObjectInput{
+			_, err := lib.S3Client().PutObject(ctx, &s3.PutObjectInput{
 				Bucket: aws.String(bucket),
 				Key:    aws.String(sizeKey),
 				Body:   bytes.NewReader([]byte(fmt.Sprint(logFileSize))),
@@ -867,7 +870,7 @@ func setupLogging(ctx context.Context) {
 			key := fmt.Sprintf("logs/%d.%s.%03d", unix, uid, count)
 			count++
 			err := lib.Retry(context.Background(), func() error {
-				_, err := lib.S3Client().PutObject(&s3.PutObjectInput{
+				_, err := lib.S3Client().PutObject(context.Background(), &s3.PutObjectInput{
 					Bucket: aws.String(os.Getenv("PROJECT_BUCKET")),
 					Key:    aws.String(key),
 					Body:   bytes.NewReader([]byte(text)),

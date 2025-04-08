@@ -1,5 +1,5 @@
 #!/bin/bash
-source env.sh
+source ${1:-env.sh}
 
 hash=$(find -name "*.go" -o -name "go.*" | sort | xargs cat | sha256sum | awk '{print $1}')
 path=/tmp/aws-exec-cli
@@ -10,5 +10,7 @@ if [ ! -f $path ] || [ "$(cat $hash_path 2>/dev/null)" != "$hash" ]; then
     go build -o $path .
     echo -n "$hash" > $hash_path
 fi
+
+shift
 
 $path "$@"
