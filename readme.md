@@ -2,7 +2,7 @@
 
 ## why
 
-building services on lambda should be easy and fun.
+so you can just ship services on aws.
 
 ## what
 
@@ -16,9 +16,9 @@ the project scaffold makes it easy to:
 
 - implement slow asynchronous apis with streaming logs, exit code, and 15 minutes max duration.
 
-- use the [web](#web-demo) admin interface, even from a [phone](#mobile-demo).
+- use the [web](#web-demo) interface, even from a [phone](#mobile-demo).
 
-- use the [cli](#cli-demo) admin interface, executing locally or on lambda.
+- use the [cli](#cli-demo) interface, executing locally or on lambda.
 
 - use the [api](#api-demo) interface, calling efficiently from other backend services.
 
