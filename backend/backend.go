@@ -39,7 +39,7 @@ import (
 func index() events.APIGatewayProxyResponse {
 	headers := map[string]string{
 		"Content-Type":               "text/html; charset=UTF-8",
-		"Content-Security-Policy":    "frame-ancestors 'none'; object-src 'none';",
+		"Content-Security-Policy":    "frame-ancestors 'none'; object-src 'none'; base-uri 'none';",
 		"X-Content-Type-Options":     "nosniff",
 		"Strict-Transport-Security":  "max-age=31536000; includeSubDomains;",
 		"Referrer-Policy":            "strict-origin",
