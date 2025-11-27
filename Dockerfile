@@ -8,7 +8,7 @@ RUN pacman -Sy --noconfirm \
     git \
     go \
     jdk-openjdk \
-    npm \
+    pnpm \
     which \
     zip
 

@@ -3,7 +3,7 @@
 out=$(mktemp)
 trap "rm $out &>/dev/null || true" EXIT
 
-bash -c "cd frontend && npx shadow-cljs compile app 2>&1 | grep -v '^\[' > $out" &
+bash -c "cd frontend && pnpm exec shadow-cljs compile app 2>&1 | grep -v '^\[' > $out" &
 pid=$!
 trap "kill -9 $pid &>/dev/null || true" EXIT
 

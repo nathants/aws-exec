@@ -29,9 +29,9 @@ EOF
 if [ -z "${NOJS:-}" ] || [ ! -f frontend/public/index.html.gz ]; then
     (
         cd frontend
-        npm ci
+        pnpm install --frozen-lockfile
         rm -rf public/js/
-        npx shadow-cljs release app
+        pnpm exec shadow-cljs release app
     ) 2>&1 | sed 's/^/shadow-cljs: /'
     inline frontend/public/js/main.js | gzip --best > frontend/public/index.html.gz
     rm -rf frontend/public/js/*

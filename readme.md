@@ -78,7 +78,7 @@ Duplicate the [listdir](https://github.com/nathants/aws-exec/tree/master/cmd/lis
 ## Dependencies
 
 Use the included [Dockerfile](./Dockerfile) or install the following dependencies:
-- npm
+- pnpm
 - JDK
 - go
 - bash
